@@ -21,7 +21,6 @@ def all_docs(dbs):
 def all_recent(dbs):
     recents = {}
     for doc in all_docs(dbs):
-        print("doc", doc)
         if "time" not in doc:
             continue
         key = pk(doc)
