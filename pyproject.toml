@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "expcomb"
+version = "0.0.1"
+description = "Some simple bookkeeping code to manage combinations of experiments"
+authors = ["Frankie Robertson <frankie@robertson.name>"]
+license = "Apache-2.0"
+
+[tool.poetry.dependencies]
+python = "^3.7"
+click-log = "^0.3.2"
+click = ">=6.7"
+tinydb = "*"
+tinyrecord = "*"
+dataclasses = "*"
+
+[tool.poetry.dev-dependencies]
+flake8 = "^3.5.0"
+pre-commit = "^1.10.2"
+pytest = "^4.1.1"
+mypy = "0.650"
+black = "==18.9b0"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
