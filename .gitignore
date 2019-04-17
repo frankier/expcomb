@@ -1,0 +1,5 @@
+*.pyc
+/expcomb.egg-info/
+/pip-wheel-metadata/
+__pycache__/
+/attic/
