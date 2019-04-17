@@ -45,8 +45,8 @@ def mk_model_path(path_info, iden):
     return pjoin(path_info.models, iden)
 
 
-def mk_iden(path_info, exp):
-    corpus_basename = basename(path_info.corpus.rstrip("/"))
+def mk_iden(corpus, exp):
+    corpus_basename = basename(corpus.rstrip("/"))
     return "{}.{}".format(corpus_basename, exp.nick)
 
 
@@ -55,3 +55,11 @@ def doc_exp_included(q_path, q_opts, d_path, d_opts):
         all((d_bit == q_bit for d_bit, q_bit in zip(d_path, q_path)))
         and all((d_opts[opt] == q_opts[opt] for opt in q_opts))
     )
+
+
+def filter_experiments(experiments, path=(), opt_dict=None):
+    if opt_dict is None:
+        opt_dict = {}
+    for exp_group in experiments:
+        for exp in exp_group.filter_exps(path, opt_dict):
+            yield exp

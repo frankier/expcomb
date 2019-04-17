@@ -1,11 +1,13 @@
 from tinydb import TinyDB
 from expcomb.utils import doc_exp_included
+from itertools import groupby
 
 
 def pk(doc):
     pk_doc = {
         "path": tuple(doc["path"]),
         "corpus": doc["corpus"],
+        "gold": doc["gold"],
     }
     if "opts" in doc:
         pk_doc.update(doc["opts"])
@@ -32,7 +34,7 @@ def all_recent(dbs):
 def get_values(docs, attr):
     vals = set()
     for doc in docs:
-        vals.add(pick(doc, attr.split(",")))
+        vals.add(pick_str(doc, attr))
     return sorted(vals)
 
 
@@ -51,16 +53,21 @@ def str_of_comb(comb):
     return ", ".join("{}={}".format(k.split(",")[-1], v) for k, v in comb)
 
 
-def get_doc(docs, opts):
+def get_docs(docs, opts):
     found = []
     for doc in docs:
         equal = True
         for k, v in opts.items():
-            if pick(doc, k.split(",")) != v:
+            if pick_str(doc, k) != v:
                 equal = False
                 break
         if equal:
             found.append(doc)
+    return found
+
+
+def get_doc(docs, opts):
+    found = get_docs(docs, opts)
     if len(found):
         assert len(found) == 1
         return found[0]
@@ -99,14 +106,25 @@ def docs_from_dbs(db_paths, filter):
 def pick(haystack, selector):
     if not selector:
         return haystack
-    return pick(haystack[selector[0]], selector[1:])
+    if selector[0].isdigit():
+        key = int(selector[0])
+    else:
+        key = selector[0]
+    return pick(haystack[key], selector[1:])
 
 
-def print_table(docs, x_groups, y_groups, measure, header=True):
-    x_bits = get_attr_value_pairs(x_groups, docs)
-    x_combs = get_attr_combs(docs, x_bits)
-    y_bits = get_attr_value_pairs(y_groups, docs)
-    y_combs = get_attr_combs(docs, y_bits)
+def pick_str(doc, selector):
+    return pick(doc, selector.split(","))
+
+
+def get_group_combs(groups, docs):
+    bits = get_attr_value_pairs(groups, docs)
+    return get_attr_combs(docs, bits)
+
+
+def print_square_table(docs, x_groups, y_groups, measure, header=True):
+    x_combs = get_group_combs(x_groups, docs)
+    y_combs = get_group_combs(y_groups, docs)
     if header:
         print(" & ", end="")
         print(
@@ -120,7 +138,52 @@ def print_table(docs, x_groups, y_groups, measure, header=True):
             opts = dict(x_comb + y_comb)
             picked_doc = get_doc(docs, opts)
             if picked_doc:
-                f1s.append(str(pick(picked_doc["measures"], measure.split(","))))
+                f1s.append(str(pick_str(picked_doc["measures"], measure)))
             else:
                 f1s.append("---")
         print(" & ".join(f1s), end=" \\\\\n")
+
+
+def first(pair):
+    return pair[0]
+
+
+def key_group_by(docs, key_func):
+    for key, grp in groupby(sorted(((key_func(doc), doc) for doc in docs), key=first), first):
+        yield key, list((e[1] for e in grp))
+
+
+def print_summary_table(docs, measures, groups=None):
+    if groups:
+        assert len(measures) == 1
+        combs = get_group_combs(groups, docs)
+        num_groups = len(groups)
+        headers = [str_of_comb(comb) for comb in combs]
+    else:
+        num_groups = 1
+        headers = measures
+    print(r"\begin{tabu} to \linewidth { l l l " + "r " * len(headers) + "}")
+    print(r"\toprule")
+    print(r"System & Variant & " + " & ".join(headers) + " \\")
+    print(r"\midrule")
+    padding = 0
+    for path, docs in key_group_by(docs, lambda doc: doc["path"]):
+        if not any((get_docs(docs, dict(comb)) for comb in combs)):
+            continue
+        doc_groups = list(key_group_by(docs, lambda doc: doc["disp"]))
+        prefix = r"\multirow{" + str(len(doc_groups)) + "}{*}{" + " ".join(p.title() for p in path) + "}"
+        padding = len(prefix)
+        print(prefix, end="")
+        first = True
+        for idx, (disp, inner_docs) in enumerate(doc_groups):
+            if idx != 0:
+                print(" " * padding, end="")
+            if groups:
+                nums = (pick_str(get_doc(inner_docs, dict(comb))["measures"], measures[0]) for comb in combs)
+            else:
+                assert len(inner_docs) == 1
+                nums = (pick_str(inner_docs[0]["measures"], m) for m in measures)
+            print(r" & " + disp + " & " + " & ".join(("{:2f}".format(n) for n in nums)) + r" \\")
+        print(r"\midrule")
+    print(r"\bottomrule")
+    print(r"\end{tabu}")

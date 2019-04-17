@@ -30,28 +30,10 @@ class Exp:
     def run_dispatch(self, paths, guess_path, model_path):
         return self.run(paths, guess_path)
 
-    def run_and_score(self, db, path_info, do_score=True):
-        paths, guess_path, model_path, gold = path_info.get_paths(mk_iden(path_info, self), self)
-        try:
-            self.run_dispatch(paths, guess_path, model_path)
-        except Exception:
-            traceback.print_exc()
-            return
-        if do_score:
-            measures = self.calc_score(gold, guess_path)
-            return self.proc_score(db, path_info, measures)
-        else:
-            return guess_path
-
-    def proc_score(self, db, path_info, measures):
-        result = self.info()
-        result["measures"] = measures
-        result["corpus"] = path_info.corpus
-        result["time"] = time.time()
-
-        with transaction(db) as tr:
-            tr.insert(result)
-        return measures
+    def run_path_info(self, path_info):
+        paths, guess_path, model_path, gold = path_info.get_paths(mk_iden(path_info.corpus, self), self)
+        self.run_dispatch(paths, guess_path, model_path)
+        return guess_path
 
 
 class SupExp(Exp):
@@ -64,10 +46,25 @@ class SupExp(Exp):
 
 
 class ExpGroup:
+    group_attrs = ()
+
     def __init__(self, exps):
         self.exps = exps
 
+    def process_group_opts(self, opt_dict):
+        opt_dict = opt_dict.copy()
+        included = True
+        for group_attr in self.group_attrs:
+            if group_attr in opt_dict:
+                if opt_dict[group_attr] != getattr(self, group_attr):
+                    included = False
+                del opt_dict[group_attr]
+        return included, opt_dict
+
     def filter_exps(self, path, opt_dict):
+        included, opt_dict = self.process_group_opts(opt_dict)
+        if not included:
+            return []
         return [
             exp
             for exp in self.exps
@@ -75,9 +72,15 @@ class ExpGroup:
         ]
 
     def exp_included(self, exp, path, opt_dict):
-        return doc_exp_included(path, opt_dict, exp.path, exp.opts)
+        included, opt_dict = self.process_group_opts(opt_dict)
+        if not included:
+            return False
+        return doc_exp_included(path, opt_dict, exp.path, {"nick": exp.nick, **exp.opts})
 
     def group_included(self, path, opt_dict):
+        included, opt_dict = self.process_group_opts(opt_dict)
+        if not included:
+            return False
         return any(
             (
                 self.exp_included(exp, path, opt_dict)
@@ -91,8 +94,15 @@ class ExpGroup:
                 logger.info("Training", exp)
                 exp.train_model(path_info)
 
-    def run_all(self, db, path_info, path, opt_dict, do_score=True):
+    def run_all(self, path_info, path, opt_dict, supress_exceptions=True):
         for exp in self.filter_exps(path, opt_dict):
             logger.info("Running", exp)
-            measures = exp.run_and_score(db, path_info, do_score=do_score)
+            try:
+                measures = exp.run_path_info(path_info)
+            except Exception:
+                if supress_exceptions:
+                    traceback.print_exc()
+                    continue
+                else:
+                    raise
             logger.info("Got", measures)

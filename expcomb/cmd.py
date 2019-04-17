@@ -1,6 +1,7 @@
 import click
 from tinydb import TinyDB
-from expcomb.table import docs_from_dbs, print_table
+from expcomb.table import docs_from_dbs, print_square_table, print_summary_table
+from .utils import filter_experiments
 import functools
 
 
@@ -29,7 +30,7 @@ class TinyDBParam(click.Path):
         return TinyDB(path).table("results")
 
 
-def mk_expcomb(experiments):
+def mk_expcomb(experiments, calc_score):
     @click.group(chain=True)
     @click.pass_context
     @click.option("--filter")
@@ -61,14 +62,24 @@ def mk_expcomb(experiments):
 
     def mk_test(inner):
         @functools.wraps(inner)
-        def wrapper(ctx, db, *args, **kwargs):
+        def wrapper(ctx, *args, **kwargs):
             path_info = inner(*args, **kwargs)
             for exp_group in experiments:
-                exp_group.run_all(db, path_info, *ctx.obj["filter"])
+                exp_group.run_all(path_info, *ctx.obj["filter"])
 
-        return expcomb.command()(click.argument("db", type=TinyDBParam())(click.pass_context(wrapper)))
+        return expcomb.command()(click.pass_context(wrapper))
 
     expcomb.mk_test = mk_test
+
+    def exp_apply_cmd(inner):
+        @functools.wraps(inner)
+        def wrapper(ctx, *args, **kwargs):
+            for exp in filter_experiments(experiments, *ctx.obj["filter"]):
+                inner(exp, *args, **kwargs)
+
+        return expcomb.command()(click.pass_context(wrapper))
+
+    expcomb.exp_apply_cmd = exp_apply_cmd
 
     @expcomb.command()
     @click.pass_context
@@ -77,9 +88,19 @@ def mk_expcomb(experiments):
     @click.argument("y_groups")
     @click.argument("measure")
     @click.option("--header/--no-header", default=True)
-    def table(ctx, db_paths, x_groups, y_groups, measure, header):
+    def comb_table(ctx, db_paths, x_groups, y_groups, measure, header):
         docs = docs_from_dbs(db_paths, ctx.obj["filter"])
-        print_table(docs, x_groups, y_groups, measure, header=header)
+        print_square_table(docs, x_groups, y_groups, measure, header=header)
+
+    @expcomb.command()
+    @click.pass_context
+    @click.argument("db_paths", type=click.Path(), nargs=-1)
+    @click.argument("measure")
+    @click.option("--groups", default=None)
+    @click.option("--header/--no-header", default=True)
+    def sum_table(ctx, db_paths, measure, groups, header):
+        docs = docs_from_dbs(db_paths, ctx.obj["filter"])
+        print_summary_table(docs, measure.split(";"), groups)
 
     @expcomb.command()
     @click.pass_context
@@ -89,4 +110,10 @@ def mk_expcomb(experiments):
         for doc in docs:
             print(doc)
 
-    return expcomb
+    class SnakeMake:
+        @staticmethod
+        def get_nicks(path=(), opt_dict=None):
+            for exp in filter_experiments(experiments, path, opt_dict):
+                yield exp.nick
+
+    return expcomb, SnakeMake
