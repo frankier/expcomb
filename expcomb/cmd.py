@@ -30,24 +30,28 @@ class TinyDBParam(click.Path):
         return TinyDB(path).table("results")
 
 
-def mk_expcomb(experiments, calc_score):
+def parse_filter(filter):
+    if not filter:
+        return ([], {})
+    filter_bits = filter.split(" ")
+    filter_path = []
+    for idx, bit in enumerate(filter_bits):
+        if "=" in bit:
+            break
+        filter_path.append(bit)
+    else:
+        idx += 1
+    opts = parse_opts(filter_bits[idx:])
+    return (filter_path, opts)
+
+
+def mk_expcomb(experiments, calc_score, pk_extra=None):
     @click.group(chain=True)
     @click.pass_context
     @click.option("--filter")
     def expcomb(ctx, filter=None):
-        ctx.obj = {}
-        if filter is None:
-            ctx.obj["filter"] = ([], {})
-            return
-        filter_bits = filter.split(" ")
-        filter_path = []
-        for idx, bit in enumerate(filter_bits):
-            if "=" in bit:
-                break
-            filter_path.append(bit)
-        opts = parse_opts(filter_bits[idx:])
         ctx.ensure_object(dict)
-        ctx.obj["filter"] = (filter_path, opts)
+        ctx.obj["filter"] = parse_filter(filter)
 
     def mk_train(inner):
         @functools.wraps(inner)
@@ -89,7 +93,7 @@ def mk_expcomb(experiments, calc_score):
     @click.argument("measure")
     @click.option("--header/--no-header", default=True)
     def comb_table(ctx, db_paths, x_groups, y_groups, measure, header):
-        docs = docs_from_dbs(db_paths, ctx.obj["filter"])
+        docs = docs_from_dbs(db_paths, ctx.obj["filter"], pk_extra)
         print_square_table(docs, x_groups, y_groups, measure, header=header)
 
     @expcomb.command()
@@ -99,14 +103,14 @@ def mk_expcomb(experiments, calc_score):
     @click.option("--groups", default=None)
     @click.option("--header/--no-header", default=True)
     def sum_table(ctx, db_paths, measure, groups, header):
-        docs = docs_from_dbs(db_paths, ctx.obj["filter"])
+        docs = docs_from_dbs(db_paths, ctx.obj["filter"], pk_extra)
         print_summary_table(docs, measure.split(";"), groups)
 
     @expcomb.command()
     @click.pass_context
     @click.argument("db_paths", type=click.Path(), nargs=-1)
     def trace(ctx, db_paths, x_groups, y_groups, header):
-        docs = docs_from_dbs(db_paths, ctx.obj["filter"])
+        docs = docs_from_dbs(db_paths, ctx.obj["filter"], pk_extra)
         for doc in docs:
             print(doc)
 

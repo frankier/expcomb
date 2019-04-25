@@ -1,16 +1,20 @@
 from tinydb import TinyDB
 from expcomb.utils import doc_exp_included
 from itertools import groupby
+import os
+from os.path import join as pjoin
+from glob import glob
 
 
-def pk(doc):
+def pk(doc, pk_extra):
     pk_doc = {
         "path": tuple(doc["path"]),
-        "corpus": doc["corpus"],
         "gold": doc["gold"],
     }
     if "opts" in doc:
         pk_doc.update(doc["opts"])
+    if pk_extra is not None:
+        pk_doc.update(pk_extra(doc))
     return tuple(sorted(pk_doc.items()))
 
 
@@ -20,12 +24,12 @@ def all_docs(dbs):
             yield doc
 
 
-def all_recent(dbs):
+def all_recent(dbs, pk_extra):
     recents = {}
     for doc in all_docs(dbs):
         if "time" not in doc:
             continue
-        key = pk(doc)
+        key = pk(doc, pk_extra)
         if key not in recents or doc["time"] > recents[key]["time"]:
             recents[key] = doc
     return recents.values()
@@ -90,11 +94,19 @@ def get_attr_value_pairs(spec, docs):
     return pairs
 
 
-def docs_from_dbs(db_paths, filter):
+def docs_from_dbs(db_paths, filter, pk_extra):
     dbs = []
+
+    def add_path(path):
+        dbs.append(TinyDB(path).table("results"))
+
     for db_path in db_paths:
-        dbs.append(TinyDB(db_path).table("results"))
-    docs = all_recent(dbs)
+        if os.path.isdir(db_path):
+            for sub_path in glob(pjoin(db_path, "**", "*.db"), recursive=True):
+                add_path(sub_path)
+        else:
+            add_path(db_path)
+    docs = all_recent(dbs, pk_extra)
     path, opt_dict = filter
     return [
         doc

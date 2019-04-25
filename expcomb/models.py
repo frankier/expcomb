@@ -38,7 +38,7 @@ class Exp:
 
 class SupExp(Exp):
     def train_model(self, path_info):
-        paths, _, model_path, _ = self.get_paths(path_info)
+        paths, _, model_path, _ = path_info.get_paths(mk_iden(path_info.corpus, self), self)
         self.train(paths, model_path)
 
     def run_dispatch(self, paths, guess_path, model_path):
@@ -75,7 +75,8 @@ class ExpGroup:
         included, opt_dict = self.process_group_opts(opt_dict)
         if not included:
             return False
-        return doc_exp_included(path, opt_dict, exp.path, {"nick": exp.nick, **exp.opts})
+        incl = doc_exp_included(path, opt_dict, exp.path, {"nick": exp.nick, **exp.opts})
+        return incl
 
     def group_included(self, path, opt_dict):
         included, opt_dict = self.process_group_opts(opt_dict)
@@ -91,12 +92,12 @@ class ExpGroup:
     def train_all(self, path_info, path, opt_dict):
         for exp in self.filter_exps(path, opt_dict):
             if isinstance(exp, SupExp):
-                logger.info("Training", exp)
+                logger.info("Training %s", exp.nick)
                 exp.train_model(path_info)
 
     def run_all(self, path_info, path, opt_dict, supress_exceptions=True):
         for exp in self.filter_exps(path, opt_dict):
-            logger.info("Running", exp)
+            logger.info("Running %s", exp.nick)
             try:
                 measures = exp.run_path_info(path_info)
             except Exception:
@@ -105,4 +106,4 @@ class ExpGroup:
                     continue
                 else:
                     raise
-            logger.info("Got", measures)
+            logger.info("Got %s", measures)
