@@ -27,12 +27,12 @@ class Exp:
     def run(self, *args, **kwargs):
         return self.run_func(*args, **kwargs)
 
-    def run_dispatch(self, paths, guess_path, model_path):
-        return self.run(paths, guess_path)
+    def run_dispatch(self, paths, guess_path, model_path, **extra):
+        return self.run(paths, guess_path, **extra)
 
-    def run_path_info(self, path_info):
+    def run_path_info(self, path_info, **extra):
         paths, guess_path, model_path, gold = path_info.get_paths(mk_iden(path_info.corpus, self), self)
-        self.run_dispatch(paths, guess_path, model_path)
+        self.run_dispatch(paths, guess_path, model_path, **extra)
         return guess_path
 
 
@@ -95,11 +95,11 @@ class ExpGroup:
                 logger.info("Training %s", exp.nick)
                 exp.train_model(path_info)
 
-    def run_all(self, path_info, path, opt_dict, supress_exceptions=True):
+    def run_all(self, path_info, path, opt_dict, supress_exceptions=True, **extra):
         for exp in self.filter_exps(path, opt_dict):
             logger.info("Running %s", exp.nick)
             try:
-                measures = exp.run_path_info(path_info)
+                measures = exp.run_path_info(path_info, **extra)
             except Exception:
                 if supress_exceptions:
                     traceback.print_exc()
