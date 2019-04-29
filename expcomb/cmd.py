@@ -120,4 +120,10 @@ def mk_expcomb(experiments, calc_score, pk_extra=None):
             for exp in filter_experiments(experiments, path, opt_dict):
                 yield exp.nick
 
+    @expcomb.command()
+    @click.pass_context
+    def trace_nicks(ctx):
+        for nick in SnakeMake.get_nicks(*ctx.obj["filter"]):
+            print(nick)
+
     return expcomb, SnakeMake
