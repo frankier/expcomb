@@ -107,3 +107,22 @@ class ExpGroup:
                 else:
                     raise
             logger.info("Got %s", measures)
+
+
+class BoundExpGroup:
+    def __init__(self, exp_group, path, opt_dict):
+        self.exp_group = exp_group
+        self.path = path
+        self.opt_dict = opt_dict
+
+
+def mk_bound_meth(meth_name):
+    def meth(self, *args, **kwargs):
+        kwargs["path"] = self.path
+        kwargs["opt_dict"] = self.opt_dict
+        getattr(self.exp_group, meth_name)(*args, **kwargs)
+    return meth
+
+
+for meth_name in ["filter_exps", "exp_included", "group_included", "train_all", "run_all"]:
+    setattr(BoundExpGroup, meth_name, mk_bound_meth(meth_name))

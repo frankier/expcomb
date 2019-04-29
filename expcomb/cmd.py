@@ -1,6 +1,7 @@
 import click
 from tinydb import TinyDB
 from expcomb.table import docs_from_dbs, print_square_table, print_summary_table
+from .models import BoundExpGroup
 from .utils import filter_experiments
 import functools
 
@@ -84,6 +85,15 @@ def mk_expcomb(experiments, calc_score, pk_extra=None):
         return expcomb.command()(click.pass_context(wrapper))
 
     expcomb.exp_apply_cmd = exp_apply_cmd
+
+    def group_apply_cmd(inner):
+        @functools.wraps(inner)
+        def wrapper(ctx, *args, **kwargs):
+            inner((BoundExpGroup(exp_group, *ctx.obj["filter"]) for exp_group in experiments), *args, **kwargs)
+
+        return expcomb.command()(click.pass_context(wrapper))
+
+    expcomb.group_apply_cmd = group_apply_cmd
 
     @expcomb.command()
     @click.pass_context
