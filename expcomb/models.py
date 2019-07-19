@@ -15,6 +15,9 @@ class Exp:
     run_func: Optional[Callable[[str, str, str], None]] = None
     opts: Dict[str, any] = field(default_factory=dict)
 
+    def get_paths_from_path_info(self, path_info):
+        return path_info.get_paths(mk_iden(path_info.corpus, self), self)
+
     def info(self):
         info = {
             "path": self.path,
@@ -31,14 +34,14 @@ class Exp:
         return self.run(paths, guess_path, **extra)
 
     def run_path_info(self, path_info, **extra):
-        paths, guess_path, model_path, gold = path_info.get_paths(mk_iden(path_info.corpus, self), self)
+        paths, guess_path, model_path, gold = self.get_paths_from_path_info(path_info)
         self.run_dispatch(paths, guess_path, model_path, **extra)
         return guess_path
 
 
 class SupExp(Exp):
     def train_model(self, path_info):
-        paths, _, model_path, _ = path_info.get_paths(mk_iden(path_info.corpus, self), self)
+        paths, _, model_path, _ = self.get_paths_from_path_info(path_info)
         self.train(paths, model_path)
 
     def run_dispatch(self, paths, guess_path, model_path):
