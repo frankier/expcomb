@@ -1,9 +1,7 @@
 import traceback
-import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
-from tinyrecord import transaction
-from .utils import score, doc_exp_included, mk_iden
+from typing import Any, Callable, Dict, List, Optional
+from .utils import doc_exp_included, mk_iden
 from expcomb import logger
 
 
@@ -13,7 +11,7 @@ class Exp:
     nick: str
     disp: str
     run_func: Optional[Callable[[str, str, str], None]] = None
-    opts: Dict[str, any] = field(default_factory=dict)
+    opts: Dict[str, Any] = field(default_factory=dict)
 
     def get_paths_from_path_info(self, path_info):
         return path_info.get_paths(mk_iden(path_info.corpus, self), self)

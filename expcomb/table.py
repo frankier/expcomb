@@ -162,10 +162,8 @@ def print_summary_table(docs, measures, groups=None):
     if groups:
         assert len(measures) == 1
         combs = get_group_combs(groups, docs)
-        num_groups = len(groups)
         headers = [str_of_comb(comb) for comb in combs]
     else:
-        num_groups = 1
         headers = measures
     print(r"\begin{tabu} to \linewidth { l l l " + "r " * len(headers) + "}")
     print(r"\toprule")
@@ -185,7 +183,6 @@ def print_summary_table(docs, measures, groups=None):
         )
         padding = len(prefix)
         print(prefix, end="")
-        first = True
         for idx, (disp, inner_docs) in enumerate(doc_groups):
             if idx != 0:
                 print(" " * padding, end="")
