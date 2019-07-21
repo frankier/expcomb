@@ -3,3 +3,5 @@
 /pip-wheel-metadata/
 __pycache__/
 /attic/
+/.tox/
+/.mypy_cache/
