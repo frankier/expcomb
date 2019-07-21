@@ -89,7 +89,14 @@ def mk_expcomb(experiments, calc_score, pk_extra=None):
     def group_apply_cmd(inner):
         @functools.wraps(inner)
         def wrapper(ctx, *args, **kwargs):
-            inner((BoundExpGroup(exp_group, *ctx.obj["filter"]) for exp_group in experiments), *args, **kwargs)
+            inner(
+                (
+                    BoundExpGroup(exp_group, *ctx.obj["filter"])
+                    for exp_group in experiments
+                ),
+                *args,
+                **kwargs
+            )
 
         return expcomb.command()(click.pass_context(wrapper))
 

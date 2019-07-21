@@ -7,10 +7,7 @@ from glob import glob
 
 
 def pk(doc, pk_extra):
-    pk_doc = {
-        "path": tuple(doc["path"]),
-        "gold": doc["gold"],
-    }
+    pk_doc = {"path": tuple(doc["path"]), "gold": doc["gold"]}
     if "opts" in doc:
         pk_doc.update(doc["opts"])
     if pk_extra is not None:
@@ -108,11 +105,7 @@ def docs_from_dbs(db_paths, filter, pk_extra):
             add_path(db_path)
     docs = all_recent(dbs, pk_extra)
     path, opt_dict = filter
-    return [
-        doc
-        for doc in docs
-        if doc_exp_included(path, opt_dict, doc["path"], doc)
-    ]
+    return [doc for doc in docs if doc_exp_included(path, opt_dict, doc["path"], doc)]
 
 
 def pick(haystack, selector):
@@ -139,9 +132,7 @@ def print_square_table(docs, x_groups, y_groups, measure, header=True):
     y_combs = get_group_combs(y_groups, docs)
     if header:
         print(" & ", end="")
-        print(
-            " & ".join((str_of_comb(y_comb) for y_comb in y_combs)), end=" \\\\\n"
-        )
+        print(" & ".join((str_of_comb(y_comb) for y_comb in y_combs)), end=" \\\\\n")
     for x_comb in x_combs:
         if header:
             print(str_of_comb(x_comb) + " & ", end="")
@@ -161,7 +152,9 @@ def first(pair):
 
 
 def key_group_by(docs, key_func):
-    for key, grp in groupby(sorted(((key_func(doc), doc) for doc in docs), key=first), first):
+    for key, grp in groupby(
+        sorted(((key_func(doc), doc) for doc in docs), key=first), first
+    ):
         yield key, list((e[1] for e in grp))
 
 
@@ -183,7 +176,13 @@ def print_summary_table(docs, measures, groups=None):
         if not any((get_docs(docs, dict(comb)) for comb in combs)):
             continue
         doc_groups = list(key_group_by(docs, lambda doc: doc["disp"]))
-        prefix = r"\multirow{" + str(len(doc_groups)) + "}{*}{" + " ".join(p.title() for p in path) + "}"
+        prefix = (
+            r"\multirow{"
+            + str(len(doc_groups))
+            + "}{*}{"
+            + " ".join(p.title() for p in path)
+            + "}"
+        )
         padding = len(prefix)
         print(prefix, end="")
         first = True
@@ -191,11 +190,20 @@ def print_summary_table(docs, measures, groups=None):
             if idx != 0:
                 print(" " * padding, end="")
             if groups:
-                nums = (pick_str(get_doc(inner_docs, dict(comb))["measures"], measures[0]) for comb in combs)
+                nums = (
+                    pick_str(get_doc(inner_docs, dict(comb))["measures"], measures[0])
+                    for comb in combs
+                )
             else:
                 assert len(inner_docs) == 1
                 nums = (pick_str(inner_docs[0]["measures"], m) for m in measures)
-            print(r" & " + disp + " & " + " & ".join(("{:2f}".format(n) for n in nums)) + r" \\")
+            print(
+                r" & "
+                + disp
+                + " & "
+                + " & ".join(("{:2f}".format(n) for n in nums))
+                + r" \\"
+            )
         print(r"\midrule")
     print(r"\bottomrule")
     print(r"\end{tabu}")

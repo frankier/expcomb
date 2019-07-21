@@ -19,11 +19,7 @@ class Exp:
         return path_info.get_paths(mk_iden(path_info.corpus, self), self)
 
     def info(self):
-        info = {
-            "path": self.path,
-            "nick": self.nick,
-            "disp": self.disp,
-        }
+        info = {"path": self.path, "nick": self.nick, "disp": self.disp}
         info["opts"] = self.opts
         return info
 
@@ -68,29 +64,22 @@ class ExpGroup:
         included, opt_dict = self.process_group_opts(opt_dict)
         if not included:
             return []
-        return [
-            exp
-            for exp in self.exps
-            if self.exp_included(exp, path, opt_dict)
-        ]
+        return [exp for exp in self.exps if self.exp_included(exp, path, opt_dict)]
 
     def exp_included(self, exp, path, opt_dict):
         included, opt_dict = self.process_group_opts(opt_dict)
         if not included:
             return False
-        incl = doc_exp_included(path, opt_dict, exp.path, {"nick": exp.nick, **exp.opts})
+        incl = doc_exp_included(
+            path, opt_dict, exp.path, {"nick": exp.nick, **exp.opts}
+        )
         return incl
 
     def group_included(self, path, opt_dict):
         included, opt_dict = self.process_group_opts(opt_dict)
         if not included:
             return False
-        return any(
-            (
-                self.exp_included(exp, path, opt_dict)
-                for exp in self.exps
-            )
-        )
+        return any((self.exp_included(exp, path, opt_dict) for exp in self.exps))
 
     def train_all(self, path_info, path, opt_dict):
         for exp in self.filter_exps(path, opt_dict):
@@ -124,8 +113,15 @@ def mk_bound_meth(meth_name):
         kwargs["path"] = self.path
         kwargs["opt_dict"] = self.opt_dict
         getattr(self.exp_group, meth_name)(*args, **kwargs)
+
     return meth
 
 
-for meth_name in ["filter_exps", "exp_included", "group_included", "train_all", "run_all"]:
+for meth_name in [
+    "filter_exps",
+    "exp_included",
+    "group_included",
+    "train_all",
+    "run_all",
+]:
     setattr(BoundExpGroup, meth_name, mk_bound_meth(meth_name))
