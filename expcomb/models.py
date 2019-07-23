@@ -43,6 +43,7 @@ class SupExp(Exp):
 
 
 class ExpGroup:
+    group_at_once = False
     group_attrs = ()
 
     def __init__(self, exps):
