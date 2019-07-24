@@ -143,6 +143,7 @@ def mk_expcomb(experiments, calc_score, pk_extra=None):
             bad_nicks = SnakeMake.get_group_at_once_nicks(path, opt_dict)
             return all_nicks - bad_nicks
 
+        @staticmethod
         def get_group_at_once_nicks(path=(), opt_dict=None):
             bad_nicks = set()
             bad_groups = SnakeMake.get_group_at_once_groups(path, opt_dict)
