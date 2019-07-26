@@ -99,6 +99,17 @@ class ExpGroup:
                     raise
             logger.info("Got %s", measures)
 
+    def path(self):
+        cur_path = None;
+        for exp in self.exps:
+            assert cur_path is None or exp.path == cur_path
+            cur_path = exp.path
+        return cur_path
+
+    def path_nick(self):
+        cur_path = self.path()
+        return ".".join((seg.lower() for seg in cur_path))
+
 
 class BoundExpGroup:
     def __init__(self, exp_group, path, opt_dict):

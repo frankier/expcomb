@@ -158,6 +158,32 @@ def mk_expcomb(experiments, calc_score, pk_extra=None):
                 if exp_group.group_included(path, opt_dict) and exp_group.group_at_once:
                     yield exp_group
 
+        @staticmethod
+        def get_group_at_once_map(path=(), opt_dict=None):
+            res = {}
+            for exp_group in experiments:
+                if exp_group.group_included(path, opt_dict) and exp_group.group_at_once:
+                    res[exp_group.path_nick()] = exp_group
+            return res
+
+        @staticmethod
+        def get_path_nick_map(path=(), opt_dict=None):
+            res = {}
+            for exp_group in experiments:
+                if exp_group.group_included(path, opt_dict) and exp_group.group_at_once:
+                    res[exp_group.path_nick()] = exp_group.path()
+            return res
+
+        @staticmethod
+        def get_nick_to_group_nick_map(path=(), opt_dict=None):
+            res = {}
+            one_at_once_groups = SnakeMake.get_group_at_once_groups(path, opt_dict)
+            for exp_group in one_at_once_groups:
+                if exp_group.group_included(path, opt_dict) and exp_group.group_at_once:
+                    for exp in exp_group.exps:
+                        res[exp.nick] = exp_group.path_nick()
+            return res
+
     @expcomb.command()
     @click.pass_context
     def trace_nicks(ctx):
