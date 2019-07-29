@@ -46,7 +46,7 @@ def parse_filter(filter):
     return (filter_path, opts)
 
 
-def mk_expcomb(experiments, calc_score, pk_extra=None):
+def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
     @click.group(chain=True)
     @click.pass_context
     @click.option("--filter")
@@ -122,6 +122,15 @@ def mk_expcomb(experiments, calc_score, pk_extra=None):
     def sum_table(ctx, db_paths, measure, groups, header):
         docs = docs_from_dbs(db_paths, ctx.obj["filter"], pk_extra)
         print_summary_table(docs, measure.split(";"), groups)
+
+    if tables:
+        @expcomb.command()
+        @click.pass_context
+        @click.argument("db_paths", type=click.Path(), nargs=-1)
+        def all_tables(ctx, db_paths):
+            docs = docs_from_dbs(db_paths, ctx.obj["filter"], pk_extra)
+            for name, spec in tables:
+                print_summary_table(docs, spec)
 
     @expcomb.command()
     @click.pass_context

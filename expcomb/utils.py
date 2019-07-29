@@ -52,7 +52,7 @@ def mk_iden(corpus, exp):
 
 def doc_exp_included(q_path, q_opts, d_path, d_opts):
     return all((d_bit == q_bit for d_bit, q_bit in zip(d_path, q_path))) and all(
-        (d_opts[opt] == q_opts[opt] for opt in q_opts)
+        (d_opts.get(opt) == q_opts[opt] for opt in q_opts)
     )
 
 

@@ -4,6 +4,8 @@ from itertools import groupby
 import os
 from os.path import join as pjoin
 from glob import glob
+from typing import List, Optional
+from abc import ABC, abstractmethod
 
 
 def pk(doc, pk_extra):
@@ -32,7 +34,7 @@ def all_recent(dbs, pk_extra):
     return recents.values()
 
 
-def get_values(docs, attr):
+def get_values(docs, attr: str):
     vals = set()
     for doc in docs:
         vals.add(pick_str(doc, attr))
@@ -74,17 +76,15 @@ def get_doc(docs, opts):
         return found[0]
 
 
-def get_attr_value_pairs(spec, docs):
+def get_attr_value_pairs(spec: List['Grouping'], docs):
     pairs = []
-    bits = spec.split(";")
-    for bit in bits:
-        av_bits = bit.split(":")
-        if len(av_bits) == 1:
-            attr = av_bits[0]
+    for bit in spec:
+        if isinstance(bit, CatGroup):
+            attr = bit.get_cat()
             vals = get_values(docs, attr)
-        elif len(av_bits) == 2:
-            attr = av_bits[0]
-            vals = av_bits[1].split(",")
+        elif isinstance(bit, CatValGroup):
+            attr = bit.get_cat()
+            vals = bit.vals
         else:
             assert False
         pairs.append((attr, vals))
@@ -122,7 +122,7 @@ def pick_str(doc, selector):
     return pick(doc, selector.split(","))
 
 
-def get_group_combs(groups, docs):
+def get_group_combs(groups: List['Grouping'], docs):
     bits = get_attr_value_pairs(groups, docs)
     return get_attr_combs(docs, bits)
 
@@ -158,21 +158,132 @@ def key_group_by(docs, key_func):
         yield key, list((e[1] for e in grp))
 
 
-def print_summary_table(docs, measures, groups=None):
-    if groups:
-        assert len(measures) == 1
-        combs = get_group_combs(groups, docs)
-        headers = [str_of_comb(comb) for comb in combs]
+def disp_num(n):
+    if isinstance(n, str):
+        return n
     else:
-        headers = measures
+        return "{:2f}".format(n)
+
+
+class Grouping(ABC):
+    @abstractmethod
+    def get_cat(self):
+        pass
+
+
+class CatGroup(Grouping):
+    def __init__(self, cat: str):
+        self.cat = cat
+
+    def get_cat(self):
+        return self.cat
+
+
+class CatValGroup(Grouping):
+    def __init__(self, cat: str, vals: List[str]):
+        self.cat = cat
+        self.vals = vals
+
+    def get_cat(self):
+        return self.cat
+
+
+class Measure(ABC):
+    @abstractmethod
+    def get_titles(self) -> Optional[List[str]]:
+        pass
+
+    @abstractmethod
+    def get_measures(self) -> List[str]:
+        pass
+
+
+class MeasuresSplit(Measure):
+    def __init__(self, measures: List[str]):
+        self.measures = measures
+
+    def get_titles(self) -> Optional[List[str]]:
+        return self.measuress
+
+    def get_measures(self) -> List[str]:
+        return self.measures
+
+
+class UnlabelledMeasure(Measure):
+    def __init__(self, measure: str):
+        self.measure = measure
+
+    def get_titles(self) -> Optional[List[str]]:
+        return None
+
+    def get_measures(self) -> List[str]:
+        return [self.measure]
+
+
+class InvalidSpecException(Exception):
+    pass
+
+
+class SumTableSpec:
+    def __init__(self, groups: List[Grouping], measure: Measure):
+        self.groups = groups
+        self.measure = measure
+
+    def bind(self, docs):
+        return BoundSumTableSpec(self.groups, self.measure, docs)
+
+
+class BoundSumTableSpec:
+    def __init__(self, groups: List[Grouping], measure: Measure, docs):
+        self.groups = groups
+        self.measure = measure
+        self.docs = docs
+        self.combs = get_group_combs(self.groups, self.docs)
+
+    def get_combs_headings(self):
+        return [str_of_comb(comb) for comb in self.combs]
+
+    def get_measure_headings(self):
+        return self.measure.get_titles()
+
+    def get_headings(self):
+        combs_headings = self.get_combs_headings()
+        measure_headings = self.get_measure_headings()
+        if measure_headings:
+            return [comb_heading + ", " + measure_heading for comb_heading in combs_headings for measure_heading in measure_headings]
+        else:
+            return combs_headings
+
+    def iter_docs(self, inner_docs):
+        if self.combs:
+            for comb in self.combs:
+                yield get_doc(inner_docs, dict(comb))
+        else:
+            assert len(inner_docs) == 1
+            yield inner_docs[0]
+
+    def measures_of_doc(self, doc):
+        if doc:
+            return (pick_str(doc["measures"], m) for m in self.measure.get_measures())
+        else:
+            return ("---" for _ in self.measure.get_measures())
+
+    def get_nums(self, inner_docs):
+        nums = []
+        for doc in self.iter_docs(inner_docs):
+            nums.extend(self.measures_of_doc(doc))
+        return nums
+
+
+def print_summary_table(docs, spec: SumTableSpec):
+    bound_spec = spec.bind(docs)
+    headers = bound_spec.get_headings()
     print(r"\begin{tabu} to \linewidth { l l l " + "r " * len(headers) + "}")
     print(r"\toprule")
     print(r"System & Variant & " + " & ".join(headers) + " \\")
     print(r"\midrule")
     padding = 0
     for path, docs in key_group_by(docs, lambda doc: doc["path"]):
-        if not any((get_docs(docs, dict(comb)) for comb in combs)):
-            continue
         doc_groups = list(key_group_by(docs, lambda doc: doc["disp"]))
         prefix = (
             r"\multirow{"
@@ -186,19 +297,11 @@ def print_summary_table(docs, measures, groups=None):
         for idx, (disp, inner_docs) in enumerate(doc_groups):
             if idx != 0:
                 print(" " * padding, end="")
-            if groups:
-                nums = (
-                    pick_str(get_doc(inner_docs, dict(comb))["measures"], measures[0])
-                    for comb in combs
-                )
-            else:
-                assert len(inner_docs) == 1
-                nums = (pick_str(inner_docs[0]["measures"], m) for m in measures)
             print(
                 r" & "
                 + disp
                 + " & "
-                + " & ".join(("{:2f}".format(n) for n in nums))
+                + " & ".join((disp_num(n) for n in bound_spec.get_nums(inner_docs)))
                 + r" \\"
             )
         print(r"\midrule")
