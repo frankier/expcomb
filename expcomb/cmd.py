@@ -4,6 +4,9 @@ from expcomb.table import docs_from_dbs, print_square_table, print_summary_table
 from .models import BoundExpGroup
 from .utils import filter_experiments
 import functools
+from io import StringIO
+from subprocess import call
+from pylatex import Document, NoEscape, Tabu, Package
 
 
 def parse_opts(opts):
@@ -127,10 +130,26 @@ def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
         @expcomb.command()
         @click.pass_context
         @click.argument("db_paths", type=click.Path(), nargs=-1)
-        def all_tables(ctx, db_paths):
+        @click.option("--preview/--no-preview")
+        def all_tables(ctx, db_paths, preview):
             docs = docs_from_dbs(db_paths, ctx.obj["filter"], pk_extra)
+
+            if preview:
+                latex_doc = Document(geometry_options={"paperwidth": "100cm", "paperheight": "100cm"})
+                latex_doc.packages.append(Package("tabu"))
+                latex_doc.packages.append(Package("booktabs"))
+                latex_doc.packages.append(Package("multirow"))
+
             for name, spec in tables:
-                print_summary_table(docs, spec)
+                table = StringIO()
+                print_summary_table(docs, spec, outf=table)
+                if preview:
+                    latex_doc.append(NoEscape(table.getvalue()))
+                print(table.getvalue())
+
+            if preview:
+                latex_doc.generate_pdf()
+                call(['evince', "default_filepath.pdf"])
 
     @expcomb.command()
     @click.pass_context
