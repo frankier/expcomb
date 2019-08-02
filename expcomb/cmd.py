@@ -27,6 +27,7 @@ def parse_opts(opts):
 
 
 class TinyDBParam(click.Path):
+
     def convert(self, value, param, ctx):
         if isinstance(value, TinyDB):
             return value
@@ -50,6 +51,7 @@ def parse_filter(filter):
 
 
 def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
+
     @click.group(chain=True)
     @click.pass_context
     @click.option("--filter")
@@ -58,6 +60,7 @@ def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
         ctx.obj["filter"] = parse_filter(filter)
 
     def mk_train(inner):
+
         @functools.wraps(inner)
         def wrapper(ctx, *args, **kwargs):
             path_info = inner(*args, **kwargs)
@@ -69,6 +72,7 @@ def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
     expcomb.mk_train = mk_train
 
     def mk_test(inner):
+
         @functools.wraps(inner)
         def wrapper(ctx, *args, **kwargs):
             path_info = inner(*args, **kwargs)
@@ -80,6 +84,7 @@ def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
     expcomb.mk_test = mk_test
 
     def exp_apply_cmd(inner):
+
         @functools.wraps(inner)
         def wrapper(ctx, *args, **kwargs):
             for exp in filter_experiments(experiments, *ctx.obj["filter"]):
@@ -90,6 +95,7 @@ def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
     expcomb.exp_apply_cmd = exp_apply_cmd
 
     def group_apply_cmd(inner):
+
         @functools.wraps(inner)
         def wrapper(ctx, *args, **kwargs):
             inner(
@@ -127,6 +133,7 @@ def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
         print_summary_table(docs, measure.split(";"), groups)
 
     if tables:
+
         @expcomb.command()
         @click.pass_context
         @click.argument("db_paths", type=click.Path(), nargs=-1)
@@ -135,7 +142,9 @@ def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
             docs = docs_from_dbs(db_paths, ctx.obj["filter"], pk_extra)
 
             if preview:
-                latex_doc = Document(geometry_options={"paperwidth": "100cm", "paperheight": "100cm"})
+                latex_doc = Document(
+                    geometry_options={"paperwidth": "100cm", "paperheight": "100cm"}
+                )
                 latex_doc.packages.append(Package("tabu"))
                 latex_doc.packages.append(Package("booktabs"))
                 latex_doc.packages.append(Package("multirow"))
@@ -149,7 +158,7 @@ def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
 
             if preview:
                 latex_doc.generate_pdf()
-                call(['evince', "default_filepath.pdf"])
+                call(["evince", "default_filepath.pdf"])
 
     @expcomb.command()
     @click.pass_context
@@ -160,6 +169,7 @@ def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
             print(doc)
 
     class SnakeMake:
+
         @staticmethod
         def get_nicks(path=(), opt_dict=None):
             for exp in filter_experiments(experiments, path, opt_dict):

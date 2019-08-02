@@ -49,7 +49,9 @@ def get_attr_combs(docs, attrs, max_depth=None):
     return [
         [(head_attr, val)] + comb
         for val in head_vals
-        for comb in get_attr_combs(docs, tail, max_depth=max_depth - 1 if max_depth is not None else None)
+        for comb in get_attr_combs(
+            docs, tail, max_depth=max_depth - 1 if max_depth is not None else None
+        )
     ]
 
 
@@ -150,5 +152,3 @@ def disp_num(n):
         return escape_latex(n)
     else:
         return "{:2f}".format(n)
-
-

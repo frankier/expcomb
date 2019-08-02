@@ -34,6 +34,7 @@ class Exp:
 
 
 class SupExp(Exp):
+
     def train_model(self, path_info):
         paths, _, model_path, _ = self.get_paths_from_path_info(path_info)
         self.train(paths, model_path)
@@ -100,7 +101,7 @@ class ExpGroup:
             logger.info("Got %s", measures)
 
     def path(self):
-        cur_path = None;
+        cur_path = None
         for exp in self.exps:
             assert cur_path is None or exp.path == cur_path
             cur_path = exp.path
@@ -112,6 +113,7 @@ class ExpGroup:
 
 
 class BoundExpGroup:
+
     def __init__(self, exp_group, path, opt_dict):
         self.exp_group = exp_group
         self.path = path
@@ -119,6 +121,7 @@ class BoundExpGroup:
 
 
 def mk_bound_meth(meth_name):
+
     def meth(self, *args, **kwargs):
         kwargs["path"] = self.path
         kwargs["opt_dict"] = self.opt_dict
@@ -128,10 +131,6 @@ def mk_bound_meth(meth_name):
 
 
 for meth_name in [
-    "filter_exps",
-    "exp_included",
-    "group_included",
-    "train_all",
-    "run_all",
+    "filter_exps", "exp_included", "group_included", "train_all", "run_all"
 ]:
     setattr(BoundExpGroup, meth_name, mk_bound_meth(meth_name))

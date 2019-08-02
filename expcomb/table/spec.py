@@ -5,12 +5,14 @@ from functools import reduce
 
 
 class Grouping(ABC):
+
     @abstractmethod
     def get_cat(self):
         pass
 
 
 class CatGroup(Grouping):
+
     def __init__(self, cat: str):
         self.cat = cat
 
@@ -19,6 +21,7 @@ class CatGroup(Grouping):
 
 
 class CatValGroup(Grouping):
+
     def __init__(self, cat: str, vals: List[str]):
         self.cat = cat
         self.vals = vals
@@ -28,6 +31,7 @@ class CatValGroup(Grouping):
 
 
 class LookupGroupDisplay:
+
     def __init__(self, group, lookup=None):
         self.group = group
         self.lookup = lookup
@@ -41,6 +45,7 @@ class LookupGroupDisplay:
 
 
 class Measure(ABC):
+
     @abstractmethod
     def get_titles(self) -> Optional[List[str]]:
         pass
@@ -51,6 +56,7 @@ class Measure(ABC):
 
 
 class MeasuresSplit(Measure):
+
     def __init__(self, measures: List[str]):
         self.measures = measures
 
@@ -62,6 +68,7 @@ class MeasuresSplit(Measure):
 
 
 class UnlabelledMeasure(Measure):
+
     def __init__(self, measure: str):
         self.measure = measure
 
@@ -77,7 +84,13 @@ class InvalidSpecException(Exception):
 
 
 class SumTableSpec:
-    def __init__(self, groups: List[LookupGroupDisplay], measure: Measure, flat_headings: bool = False):
+
+    def __init__(
+        self,
+        groups: List[LookupGroupDisplay],
+        measure: Measure,
+        flat_headings: bool = False,
+    ):
         self.groups = groups
         self.measure = measure
         self.flat_headings = flat_headings
@@ -87,6 +100,7 @@ class SumTableSpec:
 
 
 class BoundSumTableSpec:
+
     def __init__(self, spec: SumTableSpec, docs):
         self.spec = spec
         self.docs = docs
@@ -104,7 +118,11 @@ class BoundSumTableSpec:
         combs_headings = self.get_combs_headings()
         measure_headings = self.get_measure_headings()
         if measure_headings:
-            return [comb_heading + ", " + measure_heading for comb_heading in combs_headings for measure_heading in measure_headings]
+            return [
+                comb_heading + ", " + measure_heading
+                for comb_heading in combs_headings
+                for measure_heading in measure_headings
+            ]
         else:
             return combs_headings
 
@@ -112,7 +130,10 @@ class BoundSumTableSpec:
         res = []
         anscestor_slices = 1
         measure_headings = self.get_measure_headings()
-        divs = [[group.disp_kv(val) for val in vals] for group, (k, vals) in zip(self.spec.groups, self.group_kvs)]
+        divs = [
+            [group.disp_kv(val) for val in vals]
+            for group, (k, vals) in zip(self.spec.groups, self.group_kvs)
+        ]
         if measure_headings:
             divs.append(measure_headings)
         descendent_slices = reduce(lambda a, b: a * b, (len(div) for div in divs))
@@ -133,12 +154,19 @@ class BoundSumTableSpec:
             found = False
             for max_depth in range(len(self.inner_groups), -1, -1):
                 print("max_depth", max_depth, file=sys.stderr)
-                combs = get_group_combs(self.inner_groups, self.docs, max_depth=max_depth)
+                combs = get_group_combs(
+                    self.inner_groups, self.docs, max_depth=max_depth
+                )
                 docs = []
                 got_any = False
                 for comb in combs:
                     print("comb", comb, file=sys.stderr)
-                    found_docs = get_docs(inner_docs, dict(comb), [grp.get_cat() for grp in self.inner_groups[max_depth:]], permissive=True)
+                    found_docs = get_docs(
+                        inner_docs,
+                        dict(comb),
+                        [grp.get_cat() for grp in self.inner_groups[max_depth:]],
+                        permissive=True,
+                    )
                     print("found_docs", found_docs, file=sys.stderr)
                     if len(found_docs) == 1:
                         got_any = True
@@ -161,7 +189,9 @@ class BoundSumTableSpec:
 
     def measures_of_doc(self, doc):
         if doc:
-            return (pick_str(doc["measures"], m) for m in self.spec.measure.get_measures())
+            return (
+                pick_str(doc["measures"], m) for m in self.spec.measure.get_measures()
+            )
         else:
             return (NoEscape("---") for _ in self.spec.measure.get_measures())
 

@@ -1,6 +1,13 @@
 import sys
 from .spec import SumTableSpec
-from .utils import get_group_combs, str_of_comb, get_doc, pick_str, key_group_by, disp_num
+from .utils import (
+    get_group_combs,
+    str_of_comb,
+    get_doc,
+    pick_str,
+    key_group_by,
+    disp_num,
+)
 from pylatex.utils import NoEscape
 
 
@@ -27,7 +34,9 @@ def print_square_table(docs, x_groups, y_groups, measure, header=True):
 def print_summary_table(docs, spec: SumTableSpec, outf=sys.stdout):
     bound_spec = spec.bind(docs)
     flat_headers = bound_spec.get_headings()
-    outf.write(r"\begin{tabu} to \linewidth { l l l " + "r " * len(flat_headers) + "}\n")
+    outf.write(
+        r"\begin{tabu} to \linewidth { l l l " + "r " * len(flat_headers) + "}\n"
+    )
     outf.write("\\toprule\n")
     if spec.flat_headings:
         outf.write(r"System & Variant & " + " & ".join(flat_headers) + " \\\\")
@@ -45,7 +54,9 @@ def print_summary_table(docs, spec: SumTableSpec, outf=sys.stdout):
             outf.write(" \\\\\n")
     outf.write("\\midrule\n")
     padding = 0
-    for path_idx, (path, docs) in enumerate(key_group_by(docs, lambda doc: doc["path"])):
+    for path_idx, (path, docs) in enumerate(
+        key_group_by(docs, lambda doc: doc["path"])
+    ):
         if path_idx > 0:
             outf.write("\\midrule\n")
         doc_groups = list(key_group_by(docs, lambda doc: doc["disp"]))
@@ -66,9 +77,8 @@ def print_summary_table(docs, spec: SumTableSpec, outf=sys.stdout):
                 + escape_latex(disp)
                 + " & "
                 + " & ".join(
-                    "\\multicolumn{{{}}}{{c}}{{{}}}".format(
-                        span, disp_num(n)
-                    ) for n, span in bound_spec.get_nums(inner_docs)
+                    "\\multicolumn{{{}}}{{c}}{{{}}}".format(span, disp_num(n))
+                    for n, span in bound_spec.get_nums(inner_docs)
                 )
                 + " \\\\\n"
             )
