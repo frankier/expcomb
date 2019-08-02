@@ -2,6 +2,14 @@ import sys
 from typing import Any, List, Optional, Tuple
 from abc import ABC, abstractmethod
 from functools import reduce
+from pylatex.utils import NoEscape
+from .utils import (
+    get_group_combs,
+    get_attr_value_pairs,
+    str_of_comb,
+    get_docs,
+    pick_str,
+)
 
 
 class Grouping(ABC):

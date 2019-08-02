@@ -8,7 +8,7 @@ from .utils import (
     key_group_by,
     disp_num,
 )
-from pylatex.utils import NoEscape
+from pylatex.utils import escape_latex
 
 
 def print_square_table(docs, x_groups, y_groups, measure, header=True):

@@ -6,7 +6,7 @@ from .utils import filter_experiments
 import functools
 from io import StringIO
 from subprocess import call
-from pylatex import Document, NoEscape, Tabu, Package
+from pylatex import Document, NoEscape, Package
 
 
 def parse_opts(opts):
