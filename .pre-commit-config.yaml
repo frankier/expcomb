@@ -1,0 +1,10 @@
+repos:
+-   repo: https://github.com/ambv/black
+    rev: stable
+    hooks:
+    - id: black
+      args: []
+-   repo: git://github.com/pre-commit/pre-commit-hooks
+    rev: master
+    hooks:
+    -   id: flake8
