@@ -41,7 +41,7 @@ class LookupGroupDisplay:
         if mapped:
             return mapped
         else:
-            return this.get_cat() + "=" + v
+            return self.group.get_cat() + "=" + v
 
 
 class Measure(ABC):
