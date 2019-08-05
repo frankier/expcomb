@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, TYPE_CHECKING
 from tinydb import TinyDB
 from expcomb.utils import doc_exp_included
 from itertools import groupby
@@ -6,7 +6,9 @@ import os
 from os.path import join as pjoin
 from glob import glob
 from pylatex.utils import escape_latex
-from .spec import CatGroup, CatValGroup, Grouping
+
+if TYPE_CHECKING:
+    from .spec import Grouping  # noqa
 
 
 def pk(doc, pk_extra):
@@ -83,7 +85,9 @@ def get_doc(docs, opts):
         return found[0]
 
 
-def get_attr_value_pairs(spec: List[Grouping], docs):
+def get_attr_value_pairs(spec: List["Grouping"], docs):
+    from .spec import CatGroup, CatValGroup
+
     pairs = []
     for bit in spec:
         if isinstance(bit, CatGroup):
@@ -111,8 +115,7 @@ def docs_from_dbs(db_paths, filter, pk_extra):
         else:
             add_path(db_path)
     docs = all_recent(dbs, pk_extra)
-    path, opt_dict = filter
-    return [doc for doc in docs if doc_exp_included(path, opt_dict, doc["path"], doc)]
+    return [doc for doc in docs if doc_exp_included(filter, doc["path"], doc)]
 
 
 def pick(haystack, selector, permissive=False):
@@ -131,7 +134,7 @@ def pick_str(doc, selector, permissive=False):
     return pick(doc, selector.split(","), permissive=permissive)
 
 
-def get_group_combs(groups: List[Grouping], docs, max_depth=None):
+def get_group_combs(groups: List["Grouping"], docs, max_depth=None):
     bits = get_attr_value_pairs(groups, docs)
     return get_attr_combs(docs, bits, max_depth=max_depth)
 

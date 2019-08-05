@@ -2,13 +2,15 @@ import sys
 from typing import Any, List, Optional, Tuple
 from abc import ABC, abstractmethod
 from functools import reduce
-from pylatex.utils import NoEscape
+from pylatex.utils import NoEscape, escape_latex
 from .utils import (
     get_group_combs,
     get_attr_value_pairs,
     str_of_comb,
     get_docs,
     pick_str,
+    disp_num,
+    key_group_by,
 )
 
 
@@ -42,7 +44,7 @@ class LookupGroupDisplay:
 
     def __init__(self, group, lookup=None):
         self.group = group
-        self.lookup = lookup
+        self.lookup = lookup or {}
 
     def disp_kv(self, v: str):
         mapped = self.lookup.get(v)
@@ -91,25 +93,76 @@ class InvalidSpecException(Exception):
     pass
 
 
-class SumTableSpec:
+class TableSpec:
+
+    def print(self, docs, outf=sys.stdout):
+        return self.bind(docs).print(outf)
+
+    def bind(self, docs):
+        return self.bound_class(self, docs)
+
+
+class BoundSqTableSpec:
+
+    def __init__(self, spec: "SqTableSpec", docs):
+        self.spec = spec
+        self.docs = docs
+        self.x_inner_groups = [gd.group for gd in self.spec.x_groups]
+        self.y_inner_groups = [gd.group for gd in self.spec.y_groups]
+        self.x_combs = get_group_combs(self.x_inner_groups, self.docs)
+        self.y_combs = get_group_combs(self.y_inner_groups, self.docs)
+
+    def print(self, outf=sys.stdout):
+        outf.write(
+            r"\begin{tabu} to \linewidth { l " + "r " * len(self.y_combs) + "}\n"
+        )
+        outf.write("\\toprule\n")
+        outf.write(" & ")
+        outf.write(
+            " & ".join((escape_latex(str_of_comb(y_comb)) for y_comb in self.y_combs))
+            + " \\\\\n"
+        )
+        for x_comb in self.x_combs:
+            outf.write(escape_latex(str_of_comb(x_comb)) + " & ")
+            f1s = []
+            for y_comb in self.y_combs:
+                opts = dict(x_comb + y_comb)
+                picked_doc = get_docs(self.docs, opts, [], permissive=True)
+                if len(picked_doc) == 1:
+                    f1s.append(
+                        escape_latex(
+                            str(
+                                pick_str(
+                                    picked_doc[0]["measures"],
+                                    self.spec.measure.get_measures()[0],
+                                )
+                            )
+                        )
+                    )
+                else:
+                    f1s.append("---")
+            outf.write(" & ".join(f1s) + " \\\\\n")
+        outf.write("\\bottomrule\n")
+        outf.write("\\end{tabu}")
+
+
+class SqTableSpec(TableSpec):
+    bound_class = BoundSqTableSpec
 
     def __init__(
         self,
-        groups: List[LookupGroupDisplay],
+        x_groups: List[LookupGroupDisplay],
+        y_groups: List[LookupGroupDisplay],
         measure: Measure,
-        flat_headings: bool = False,
     ):
-        self.groups = groups
+        self.x_groups = x_groups
+        self.y_groups = y_groups
         self.measure = measure
-        self.flat_headings = flat_headings
-
-    def bind(self, docs):
-        return BoundSumTableSpec(self, docs)
 
 
 class BoundSumTableSpec:
 
-    def __init__(self, spec: SumTableSpec, docs):
+    def __init__(self, spec: "SumTableSpec", docs):
         self.spec = spec
         self.docs = docs
         self.inner_groups = [gd.group for gd in self.spec.groups]
@@ -135,7 +188,7 @@ class BoundSumTableSpec:
             return combs_headings
 
     def get_nested_headings(self) -> List[List[Tuple[str, int]]]:
-        res = []
+        res: List[List[Tuple[str, int]]] = []
         anscestor_slices = 1
         measure_headings = self.get_measure_headings()
         divs = [
@@ -147,7 +200,7 @@ class BoundSumTableSpec:
         descendent_slices = reduce(lambda a, b: a * b, (len(div) for div in divs))
         for splits in divs:
             descendent_slices //= len(splits)
-            stratum = []
+            stratum: List[Tuple[str, int]] = []
             for _ in range(anscestor_slices):
                 for split in splits:
                     stratum.append((split, descendent_slices))
@@ -156,26 +209,23 @@ class BoundSumTableSpec:
         return res
 
     def comb_order_docs(self, inner_docs) -> List[Tuple[Any, int]]:
-        result = []
+        result: List[Tuple[Any, int]] = []
         if self.combs:
             span = 1
             found = False
             for max_depth in range(len(self.inner_groups), -1, -1):
-                print("max_depth", max_depth, file=sys.stderr)
                 combs = get_group_combs(
                     self.inner_groups, self.docs, max_depth=max_depth
                 )
                 docs = []
                 got_any = False
                 for comb in combs:
-                    print("comb", comb, file=sys.stderr)
                     found_docs = get_docs(
                         inner_docs,
                         dict(comb),
                         [grp.get_cat() for grp in self.inner_groups[max_depth:]],
                         permissive=True,
                     )
-                    print("found_docs", found_docs, file=sys.stderr)
                     if len(found_docs) == 1:
                         got_any = True
                         docs.append(found_docs[0])
@@ -192,7 +242,6 @@ class BoundSumTableSpec:
         else:
             assert len(inner_docs) == 1
             result.append((inner_docs[0], 1))
-        print("result", result, file=sys.stderr)
         return result
 
     def measures_of_doc(self, doc):
@@ -208,3 +257,70 @@ class BoundSumTableSpec:
         for doc, span in self.comb_order_docs(inner_docs):
             nums.extend(((measure, span) for measure in self.measures_of_doc(doc)))
         return nums
+
+    def print(self, outf=sys.stdout):
+        flat_headers = self.get_headings()
+        outf.write(
+            r"\begin{tabu} to \linewidth { l l l " + "r " * len(flat_headers) + "}\n"
+        )
+        outf.write("\\toprule\n")
+        if self.spec.flat_headings:
+            outf.write(r"System & Variant & " + " & ".join(flat_headers) + " \\\\")
+        else:
+            headers = self.get_nested_headings()
+            outf.write("\\multirow{{{}}}{{*}}{{System}} & ".format(len(headers)))
+            outf.write("\\multirow{{{}}}{{*}}{{Variant}} & ".format(len(headers)))
+            for stratum_idx, stratum in enumerate(headers):
+                if stratum_idx >= 1:
+                    outf.write("& & ")
+                for label_idx, (label, span) in enumerate(stratum):
+                    if label_idx != 0:
+                        outf.write("& ")
+                    outf.write("\\multicolumn{{{}}}{{c}}{{{}}} ".format(span, label))
+                outf.write(" \\\\\n")
+        outf.write("\\midrule\n")
+        padding = 0
+        for path_idx, (path, outer_docs) in enumerate(
+            key_group_by(self.docs, lambda doc: doc["path"])
+        ):
+            if path_idx > 0:
+                outf.write("\\midrule\n")
+            doc_groups = list(key_group_by(outer_docs, lambda doc: doc["disp"]))
+            prefix = (
+                r"\multirow{"
+                + str(len(doc_groups))
+                + "}{*}{"
+                + " ".join(p.title() for p in path)
+                + "}"
+            )
+            padding = len(prefix)
+            outf.write(prefix)
+            for idx, (disp, inner_docs) in enumerate(doc_groups):
+                if idx != 0:
+                    outf.write(" " * padding)
+                outf.write(
+                    r" & "
+                    + escape_latex(disp)
+                    + " & "
+                    + " & ".join(
+                        "\\multicolumn{{{}}}{{c}}{{{}}}".format(span, disp_num(n))
+                        for n, span in self.get_nums(inner_docs)
+                    )
+                    + " \\\\\n"
+                )
+        outf.write("\\bottomrule\n")
+        outf.write("\\end{tabu}")
+
+
+class SumTableSpec(TableSpec):
+    bound_class = BoundSumTableSpec
+
+    def __init__(
+        self,
+        groups: List[LookupGroupDisplay],
+        measure: Measure,
+        flat_headings: bool = False,
+    ):
+        self.groups = groups
+        self.measure = measure
+        self.flat_headings = flat_headings

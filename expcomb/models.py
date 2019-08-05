@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 from .utils import doc_exp_included, mk_iden
 from expcomb import logger
+from .filter import SimpleFilter
 
 
 @dataclass(frozen=True)
@@ -60,35 +61,35 @@ class ExpGroup:
                 del opt_dict[group_attr]
         return included, opt_dict
 
-    def filter_exps(self, path, opt_dict):
-        included, opt_dict = self.process_group_opts(opt_dict)
+    def filter_exps(self, filter: SimpleFilter):
+        included, opt_dict = self.process_group_opts(filter.opt_dict)
         if not included:
             return []
-        return [exp for exp in self.exps if self.exp_included(exp, path, opt_dict)]
+        return [exp for exp in self.exps if self.exp_included(exp, filter)]
 
-    def exp_included(self, exp, path, opt_dict):
-        included, opt_dict = self.process_group_opts(opt_dict)
+    def exp_included(self, exp, filter: SimpleFilter):
+        included, opt_dict = self.process_group_opts(filter.opt_dict)
         if not included:
             return False
-        incl = doc_exp_included(
-            path, opt_dict, exp.path, {"nick": exp.nick, **exp.opts}
-        )
+        incl = doc_exp_included(filter, exp.path, {"nick": exp.nick, **exp.opts})
         return incl
 
-    def group_included(self, path, opt_dict):
-        included, opt_dict = self.process_group_opts(opt_dict)
+    def group_included(self, filter: SimpleFilter):
+        included, opt_dict = self.process_group_opts(filter.opt_dict)
         if not included:
             return False
-        return any((self.exp_included(exp, path, opt_dict) for exp in self.exps))
+        return any((self.exp_included(exp, filter) for exp in self.exps))
 
-    def train_all(self, path_info, path, opt_dict):
-        for exp in self.filter_exps(path, opt_dict):
+    def train_all(self, path_info, filter: SimpleFilter):
+        for exp in self.filter_exps(filter):
             if isinstance(exp, SupExp):
                 logger.info("Training %s", exp.nick)
                 exp.train_model(path_info)
 
-    def run_all(self, path_info, path, opt_dict, supress_exceptions=True, **extra):
-        for exp in self.filter_exps(path, opt_dict):
+    def run_all(
+        self, path_info, filter: SimpleFilter, supress_exceptions=True, **extra
+    ):
+        for exp in self.filter_exps(filter):
             logger.info("Running %s", exp.nick)
             try:
                 measures = exp.run_path_info(path_info, **extra)
@@ -114,17 +115,15 @@ class ExpGroup:
 
 class BoundExpGroup:
 
-    def __init__(self, exp_group, path, opt_dict):
+    def __init__(self, exp_group, filter: SimpleFilter):
         self.exp_group = exp_group
-        self.path = path
-        self.opt_dict = opt_dict
+        self.filter = filter
 
 
 def mk_bound_meth(meth_name):
 
     def meth(self, *args, **kwargs):
-        kwargs["path"] = self.path
-        kwargs["opt_dict"] = self.opt_dict
+        kwargs["filter"] = self.filter
         getattr(self.exp_group, meth_name)(*args, **kwargs)
 
     return meth

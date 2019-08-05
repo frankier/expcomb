@@ -1,5 +1,6 @@
 from plumbum.cmd import java
 from os.path import join as pjoin, basename
+from .filter import SimpleFilter
 
 
 def mk_nick(*inbits):
@@ -50,15 +51,13 @@ def mk_iden(corpus, exp):
     return "{}.{}".format(corpus_basename, exp.nick)
 
 
-def doc_exp_included(q_path, q_opts, d_path, d_opts):
-    return all((d_bit == q_bit for d_bit, q_bit in zip(d_path, q_path))) and all(
-        (d_opts.get(opt) == q_opts[opt] for opt in q_opts)
+def doc_exp_included(q_filter: SimpleFilter, d_path, d_opts):
+    return all((d_bit == q_bit for d_bit, q_bit in zip(d_path, q_filter.path))) and all(
+        (d_opts.get(opt) == q_filter.opt_dict[opt] for opt in q_filter.opt_dict)
     )
 
 
-def filter_experiments(experiments, path=(), opt_dict=None):
-    if opt_dict is None:
-        opt_dict = {}
+def filter_experiments(experiments, filter: SimpleFilter):
     for exp_group in experiments:
-        for exp in exp_group.filter_exps(path, opt_dict):
+        for exp in exp_group.filter_exps(filter):
             yield exp
