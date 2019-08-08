@@ -7,6 +7,9 @@ class SimpleFilter:
         self.path = path
         self.opt_dict = opt_dict
 
+    def intersect_opts(self, **opt_dict):
+        return SimpleFilter(*self.path, **self.opt_dict, **opt_dict)
+
 
 empty_filter = SimpleFilter()
 
