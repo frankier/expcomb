@@ -10,6 +10,12 @@ class SimpleFilter:
     def intersect_opts(self, **opt_dict):
         return SimpleFilter(*self.path, **self.opt_dict, **opt_dict)
 
+    def __repr__(self):
+        return "<SimpleFilter {}; {}>".format(
+            " ".join(self.path),
+            ", ".join(("{}={}".format(k, repr(v)) for k, v in self.opt_dict.items())),
+        )
+
 
 empty_filter = SimpleFilter()
 
