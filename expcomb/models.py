@@ -71,7 +71,11 @@ class ExpGroup:
         included, opt_dict = self.process_group_opts(filter.opt_dict)
         if not included:
             return False
-        incl = doc_exp_included(filter, exp.path, {"nick": exp.nick, **exp.opts})
+        incl = doc_exp_included(
+            SimpleFilter(*filter.path, **opt_dict),
+            exp.path,
+            {"nick": exp.nick, **exp.opts},
+        )
         return incl
 
     def group_included(self, filter: SimpleFilter):
