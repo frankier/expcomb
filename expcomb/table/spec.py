@@ -1,7 +1,6 @@
 import sys
 from typing import Any, List, Optional, Tuple
 from abc import ABC, abstractmethod
-from functools import reduce
 from pylatex.utils import NoEscape, escape_latex
 from .utils import (
     get_group_combs,
@@ -11,6 +10,8 @@ from .utils import (
     pick_str,
     disp_num,
     key_group_by,
+    get_nested_headings,
+    write_stratum_row,
 )
 
 
@@ -51,7 +52,7 @@ class LookupGroupDisplay:
         if mapped:
             return mapped
         else:
-            return self.group.get_cat() + "=" + v
+            return self.group.get_cat() + "=" + str(v)
 
 
 class Measure(ABC):
@@ -111,17 +112,30 @@ class BoundSqTableSpec:
         self.y_inner_groups = [gd.group for gd in self.spec.y_groups]
         self.x_combs = get_group_combs(self.x_inner_groups, self.docs)
         self.y_combs = get_group_combs(self.y_inner_groups, self.docs)
+        self.x_group_kvs = get_attr_value_pairs(self.x_inner_groups, self.docs)
+        self.y_group_kvs = get_attr_value_pairs(self.y_inner_groups, self.docs)
+
+    def get_nested_headings(self) -> List[List[Tuple[str, int]]]:
+        return get_nested_headings(self.spec.y_groups, self.y_group_kvs)
 
     def print(self, outf=sys.stdout):
         outf.write(
             r"\begin{tabu} to \linewidth { l " + "r " * len(self.y_combs) + "}\n"
         )
         outf.write("\\toprule\n")
-        outf.write(" & ")
-        outf.write(
-            " & ".join((escape_latex(str_of_comb(y_comb)) for y_comb in self.y_combs))
-            + " \\\\\n"
-        )
+        if self.spec.flat_headings:
+            outf.write(" & ")
+            outf.write(
+                " & ".join(
+                    (escape_latex(str_of_comb(y_comb)) for y_comb in self.y_combs)
+                )
+                + " \\\\\n"
+            )
+        else:
+            headers = self.get_nested_headings()
+            for stratum_idx, stratum in enumerate(headers):
+                outf.write("& ")
+                write_stratum_row(stratum, outf)
         for x_comb in self.x_combs:
             outf.write(escape_latex(str_of_comb(x_comb)) + " & ")
             f1s = []
@@ -154,10 +168,12 @@ class SqTableSpec(TableSpec):
         x_groups: List[LookupGroupDisplay],
         y_groups: List[LookupGroupDisplay],
         measure: Measure,
+        flat_headings: bool = False,
     ):
         self.x_groups = x_groups
         self.y_groups = y_groups
         self.measure = measure
+        self.flat_headings = flat_headings
 
 
 class BoundSumTableSpec:
@@ -188,25 +204,9 @@ class BoundSumTableSpec:
             return combs_headings
 
     def get_nested_headings(self) -> List[List[Tuple[str, int]]]:
-        res: List[List[Tuple[str, int]]] = []
-        anscestor_slices = 1
-        measure_headings = self.get_measure_headings()
-        divs = [
-            [group.disp_kv(val) for val in vals]
-            for group, (k, vals) in zip(self.spec.groups, self.group_kvs)
-        ]
-        if measure_headings:
-            divs.append(measure_headings)
-        descendent_slices = reduce(lambda a, b: a * b, (len(div) for div in divs))
-        for splits in divs:
-            descendent_slices //= len(splits)
-            stratum: List[Tuple[str, int]] = []
-            for _ in range(anscestor_slices):
-                for split in splits:
-                    stratum.append((split, descendent_slices))
-            res.append(stratum)
-            anscestor_slices *= len(splits)
-        return res
+        return get_nested_headings(
+            self.spec.groups, self.group_kvs, self.get_measure_headings()
+        )
 
     def comb_order_docs(self, inner_docs) -> List[Tuple[Any, int]]:
         result: List[Tuple[Any, int]] = []
@@ -273,11 +273,7 @@ class BoundSumTableSpec:
             for stratum_idx, stratum in enumerate(headers):
                 if stratum_idx >= 1:
                     outf.write("& & ")
-                for label_idx, (label, span) in enumerate(stratum):
-                    if label_idx != 0:
-                        outf.write("& ")
-                    outf.write("\\multicolumn{{{}}}{{c}}{{{}}} ".format(span, label))
-                outf.write(" \\\\\n")
+                write_stratum_row(stratum, outf)
         outf.write("\\midrule\n")
         padding = 0
         for path_idx, (path, outer_docs) in enumerate(

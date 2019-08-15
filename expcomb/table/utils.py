@@ -1,4 +1,5 @@
-from typing import List, TYPE_CHECKING
+from functools import reduce
+from typing import Tuple, List, TYPE_CHECKING
 from tinydb import TinyDB
 from expcomb.utils import doc_exp_included
 from itertools import groupby
@@ -6,6 +7,7 @@ import os
 from os.path import join as pjoin
 from glob import glob
 from pylatex.utils import escape_latex
+
 
 if TYPE_CHECKING:
     from .spec import Grouping  # noqa
@@ -155,3 +157,34 @@ def disp_num(n):
         return escape_latex(n)
     else:
         return "{:2f}".format(n)
+
+
+def get_nested_headings(
+    groups, group_kvs, measure_headings=None
+) -> List[List[Tuple[str, int]]]:
+    res: List[List[Tuple[str, int]]] = []
+    anscestor_slices = 1
+    divs = [
+        [group.disp_kv(val) for val in vals]
+        for group, (k, vals) in zip(groups, group_kvs)
+    ]
+    if measure_headings:
+        divs.append(measure_headings)
+    descendent_slices = reduce(lambda a, b: a * b, (len(div) for div in divs))
+    for splits in divs:
+        descendent_slices //= len(splits)
+        stratum: List[Tuple[str, int]] = []
+        for _ in range(anscestor_slices):
+            for split in splits:
+                stratum.append((split, descendent_slices))
+        res.append(stratum)
+        anscestor_slices *= len(splits)
+    return res
+
+
+def write_stratum_row(stratum, outf):
+    for label_idx, (label, span) in enumerate(stratum):
+        if label_idx != 0:
+            outf.write("& ")
+        outf.write("\\multicolumn{{{}}}{{c}}{{{}}} ".format(span, label))
+    outf.write(" \\\\\n")
