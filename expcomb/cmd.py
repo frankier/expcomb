@@ -3,7 +3,7 @@ from tinydb import TinyDB
 from expcomb.table.utils import docs_from_dbs
 from .models import BoundExpGroup
 from .utils import filter_experiments
-from .table.cmd import add_all_tables
+from .table.cmd import add_tables
 from .filter import parse_filter, SimpleFilter, empty_filter
 import functools
 
@@ -79,7 +79,7 @@ def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
     expcomb.group_apply_cmd = group_apply_cmd
 
     if tables:
-        add_all_tables(expcomb, tables, pk_extra)
+        add_tables(expcomb, tables, pk_extra)
 
     @expcomb.command()
     @click.pass_context
