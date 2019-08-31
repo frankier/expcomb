@@ -246,9 +246,15 @@ class BoundSumTableSpec:
 
     def measures_of_doc(self, doc):
         if doc:
-            return (
-                pick_str(doc["measures"], m) for m in self.spec.measure.get_measures()
-            )
+
+            def get_measure(m):
+                measure = pick_str(doc["measures"], m, permissive=True)
+                if measure is None:
+                    return NoEscape("---")
+                else:
+                    return measure
+
+            return (get_measure(m) for m in self.spec.measure.get_measures())
         else:
             return (NoEscape("---") for _ in self.spec.measure.get_measures())
 
