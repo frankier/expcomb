@@ -3,8 +3,25 @@ from io import StringIO
 from subprocess import call
 from pylatex import Document, NoEscape, Package
 
+from expcomb.doc_utils import pk
 from expcomb.filter import empty_filter
-from .utils import docs_from_dbs
+from .utils import docs_from_dbs, highlights_from_dbs
+
+
+def fixup_lists(v):
+    if isinstance(v, list):
+        return tuple(v)
+    return v
+
+
+def indicate_highlights(docs, highlights, pk_extra):
+    highlights_keyed = set()
+    for highlight in highlights:
+        highlights_keyed.add(
+            tuple(sorted((k, fixup_lists(v)) for k, v in highlight.items()))
+        )
+    for doc in docs:
+        doc["highlight"] = pk(doc, pk_extra) in highlights_keyed
 
 
 def add_tables(group, tables_tpls, pk_extra):
@@ -22,6 +39,8 @@ def add_tables(group, tables_tpls, pk_extra):
             latex_doc.packages.append(Package("tabu"))
             latex_doc.packages.append(Package("booktabs"))
             latex_doc.packages.append(Package("multirow"))
+            latex_doc.packages.append(Package("xcolor"))
+            latex_doc.packages.append(Package("colortbl"))
 
         for table_tpl in tables_tpls:
             name, spec = table_tpl[:2]
@@ -32,6 +51,8 @@ def add_tables(group, tables_tpls, pk_extra):
             else:
                 filter = empty_filter
             docs = docs_from_dbs(db_paths, filter, pk_extra)
+            highlights = highlights_from_dbs(db_paths, filter)
+            indicate_highlights(docs, highlights, pk_extra)
 
             table_code = StringIO()
             table_code.write("\n% Table: {}\n".format(name))

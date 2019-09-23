@@ -1,3 +1,5 @@
+import click
+from tinydb import TinyDB
 from plumbum.cmd import java
 from os.path import join as pjoin, basename
 from .filter import SimpleFilter
@@ -61,3 +63,12 @@ def filter_experiments(experiments, filter: SimpleFilter):
     for exp_group in experiments:
         for exp in exp_group.filter_exps(filter):
             yield exp
+
+
+class TinyDBParam(click.Path):
+
+    def convert(self, value, param, ctx):
+        if isinstance(value, TinyDB):
+            return value
+        path = super().convert(value, param, ctx)
+        return TinyDB(path).table("results")

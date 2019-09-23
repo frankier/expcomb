@@ -1,42 +1,13 @@
 from functools import reduce
 from typing import Tuple, List, TYPE_CHECKING
-from tinydb import TinyDB
 from expcomb.utils import doc_exp_included
 from itertools import groupby
-import os
-from os.path import join as pjoin
-from glob import glob
 from pylatex.utils import escape_latex
+from expcomb.doc_utils import all_docs_from_dbs, all_docs, expand_db_paths
 
 
 if TYPE_CHECKING:
     from .spec import Grouping  # noqa
-
-
-def pk(doc, pk_extra):
-    pk_doc = {"path": tuple(doc["path"]), "gold": doc["gold"]}
-    if "opts" in doc:
-        pk_doc.update(doc["opts"])
-    if pk_extra is not None:
-        pk_doc.update(pk_extra(doc))
-    return tuple(sorted(pk_doc.items()))
-
-
-def all_docs(dbs):
-    for db in dbs:
-        for doc in db.all():
-            yield doc
-
-
-def all_recent(dbs, pk_extra):
-    recents = {}
-    for doc in all_docs(dbs):
-        if "time" not in doc:
-            continue
-        key = pk(doc, pk_extra)
-        if key not in recents or doc["time"] > recents[key]["time"]:
-            recents[key] = doc
-    return recents.values()
 
 
 def get_values(docs, attr: str):
@@ -105,19 +76,22 @@ def get_attr_value_pairs(spec: List["Grouping"], docs):
 
 
 def docs_from_dbs(db_paths, filter, pk_extra):
-    dbs = []
-
-    def add_path(path):
-        dbs.append(TinyDB(path).table("results"))
-
-    for db_path in db_paths:
-        if os.path.isdir(db_path):
-            for sub_path in glob(pjoin(db_path, "**", "*.db"), recursive=True):
-                add_path(sub_path)
-        else:
-            add_path(db_path)
-    docs = all_recent(dbs, pk_extra)
+    docs = all_docs_from_dbs(db_paths, pk_extra)
     return [doc for doc in docs if doc_exp_included(filter, doc["path"], doc)]
+
+
+def highlights_from_dbs(db_paths, filter):
+    docs = all_docs(expand_db_paths(db_paths))
+    guesses = []
+    for doc in docs:
+        if not doc.get("type") == "highlight-guesses":
+            continue
+        for guess in doc["guesses"]:
+            if not doc_exp_included(filter, guess["path"], guess):
+                continue
+            guesses.append(guess)
+
+    return guesses
 
 
 def pick(haystack, selector, permissive=False):

@@ -10,9 +10,10 @@ def calc_exp_score(exp, corpus, gold, guess, calc_score):
     return calc_score(gold, guess_path)
 
 
-def proc_score(exp, db, measures, gold, **kwargs):
+def proc_score(exp, db, measures, guess, gold, **kwargs):
     result = exp.info()
     result["measures"] = measures
+    result["guess"] = guess
     result["gold"] = gold
     result["time"] = time()
     result.update(kwargs)

@@ -96,16 +96,16 @@ class InvalidSpecException(Exception):
 
 class TableSpec:
 
-    def print(self, docs, outf=sys.stdout):
-        return self.bind(docs).print(outf)
+    def print(self, *args, outf=sys.stdout):
+        return self.bind(*args).print(outf)
 
-    def bind(self, docs):
-        return self.bound_class(self, docs)
+    def bind(self, *args):
+        return self.bound_class(self, *args)
 
 
 class BoundSqTableSpec:
 
-    def __init__(self, spec: "SqTableSpec", docs):
+    def __init__(self, spec: "SqTableSpec", docs, permissive=False):
         self.spec = spec
         self.docs = docs
         self.x_inner_groups = [gd.group for gd in self.spec.x_groups]
@@ -114,14 +114,20 @@ class BoundSqTableSpec:
         self.y_combs = get_group_combs(self.y_inner_groups, self.docs)
         self.x_group_kvs = get_attr_value_pairs(self.x_inner_groups, self.docs)
         self.y_group_kvs = get_attr_value_pairs(self.y_inner_groups, self.docs)
+        if self.spec.highlight is box_highlight:
+            assert (
+                permissive or all(("highlight" in doc for doc in docs))
+            ), "No highlights found even though included in spec"
+        else:
+            assert (
+                permissive or not any(("highlight" in doc for doc in docs))
+            ), "Highlights found when not included in spec"
 
     def get_nested_headings(self) -> List[List[Tuple[str, int]]]:
         return get_nested_headings(self.spec.y_groups, self.y_group_kvs)
 
     def print(self, outf=sys.stdout):
-        outf.write(
-            r"\begin{tabu} to \linewidth { l " + "r " * len(self.y_combs) + "}\n"
-        )
+        outf.write(r"\begin{tabular}{ l " + "r " * len(self.y_combs) + "}\n")
         outf.write("\\toprule\n")
         if self.spec.flat_headings:
             outf.write(" & ")
@@ -138,12 +144,13 @@ class BoundSqTableSpec:
                 write_stratum_row(stratum, outf)
         for x_comb in self.x_combs:
             outf.write(escape_latex(str_of_comb(x_comb)) + " & ")
-            f1s = []
-            for y_comb in self.y_combs:
+            for col_num, y_comb in enumerate(self.y_combs):
                 opts = dict(x_comb + y_comb)
                 picked_doc = get_docs(self.docs, opts, [], permissive=True)
                 if len(picked_doc) == 1:
-                    f1s.append(
+                    if picked_doc[0].get("highlight"):
+                        outf.write("\\cellcolor{blue!10}")
+                    outf.write(
                         escape_latex(
                             str(
                                 pick_str(
@@ -154,10 +161,15 @@ class BoundSqTableSpec:
                         )
                     )
                 else:
-                    f1s.append("---")
-            outf.write(" & ".join(f1s) + " \\\\\n")
+                    outf.write("---")
+                if col_num < len(self.y_combs) - 1:
+                    outf.write(" & ")
+            outf.write(" \\\\\n")
         outf.write("\\bottomrule\n")
-        outf.write("\\end{tabu}")
+        outf.write("\\end{tabular}")
+
+
+box_highlight = object()
 
 
 class SqTableSpec(TableSpec):
@@ -168,12 +180,15 @@ class SqTableSpec(TableSpec):
         x_groups: List[LookupGroupDisplay],
         y_groups: List[LookupGroupDisplay],
         measure: Measure,
+        highlight=None,
         flat_headings: bool = False,
     ):
         self.x_groups = x_groups
         self.y_groups = y_groups
         self.measure = measure
         self.flat_headings = flat_headings
+        assert highlight in [None, box_highlight]
+        self.highlight = highlight
 
 
 class BoundSumTableSpec:

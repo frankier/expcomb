@@ -1,25 +1,16 @@
 import click
-from tinydb import TinyDB
 from expcomb.table.utils import docs_from_dbs
 from .models import BoundExpGroup
 from .utils import filter_experiments
 from .table.cmd import add_tables
+from .sigtest.cmd import merged as sigtest_merged
 from .filter import parse_filter, SimpleFilter, empty_filter
 import functools
 
 
-class TinyDBParam(click.Path):
-
-    def convert(self, value, param, ctx):
-        if isinstance(value, TinyDB):
-            return value
-        path = super().convert(value, param, ctx)
-        return TinyDB(path).table("results")
-
-
 def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
 
-    @click.group(chain=True)
+    @click.group()
     @click.pass_context
     @click.option("--filter")
     def expcomb(ctx, filter=None):
@@ -148,5 +139,7 @@ def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
     def trace_nicks(ctx):
         for nick in SnakeMake.get_nicks(*ctx.obj["filter"]):
             print(nick)
+
+    expcomb.add_command(sigtest_merged, "sigtest")
 
     return expcomb, SnakeMake
