@@ -1,4 +1,3 @@
-from functools import reduce
 from typing import Tuple, List, TYPE_CHECKING
 from expcomb.utils import doc_exp_included
 from itertools import groupby
@@ -7,7 +6,7 @@ from expcomb.doc_utils import all_docs_from_dbs, all_docs, expand_db_paths
 
 
 if TYPE_CHECKING:
-    from .spec import Grouping  # noqa
+    from .spec import Grouping, BoundDimGroups  # noqa
 
 
 def get_values(docs, attr: str):
@@ -80,13 +79,13 @@ def docs_from_dbs(db_paths, filter, pk_extra):
     return [doc for doc in docs if doc_exp_included(filter, doc["path"], doc)]
 
 
-def highlights_from_dbs(db_paths, filter):
+def highlights_from_dbs(db_paths, filter, key):
     docs = all_docs(expand_db_paths(db_paths))
     guesses = []
     for doc in docs:
         if not doc.get("type") == "highlight-guesses":
             continue
-        for guess in doc["guesses"]:
+        for guess in doc[key]:
             if not doc_exp_included(filter, guess["path"], guess):
                 continue
             guesses.append(guess)
@@ -133,32 +132,83 @@ def disp_num(n):
         return "{:2f}".format(n)
 
 
-def get_nested_headings(
-    groups, group_kvs, measure_headings=None
-) -> List[List[Tuple[str, int]]]:
-    res: List[List[Tuple[str, int]]] = []
-    anscestor_slices = 1
+def get_divs(groups, group_kvs, measure_headings=None):
     divs = [
         [group.disp_kv(val) for val in vals]
         for group, (k, vals) in zip(groups, group_kvs)
     ]
     if measure_headings:
         divs.append(measure_headings)
-    descendent_slices = reduce(lambda a, b: a * b, (len(div) for div in divs))
-    for splits in divs:
-        descendent_slices //= len(splits)
+    return divs
+
+
+def get_nested_headings(groups: "BoundDimGroups") -> List[List[Tuple[str, int]]]:
+    res: List[List[Tuple[str, int]]] = []
+    for splits, descendent_slices, anscestor_slices in groups.iter_divs_slices():
         stratum: List[Tuple[str, int]] = []
         for _ in range(anscestor_slices):
             for split in splits:
                 stratum.append((split, descendent_slices))
         res.append(stratum)
-        anscestor_slices *= len(splits)
     return res
 
 
-def write_stratum_row(stratum, outf):
+def write_stratum_row(stratum, outf, sep_slices=None):
     for label_idx, (label, span) in enumerate(stratum):
         if label_idx != 0:
             outf.write("& ")
-        outf.write("\\multicolumn{{{}}}{{c}}{{{}}} ".format(span, label))
+        if label_idx > 0 and label_idx % sep_slices == 0:
+            line = "|"
+        else:
+            line = ""
+        outf.write("\\multicolumn{{{}}}{{{}c}}{{{}}} ".format(span, line, label))
     outf.write(" \\\\\n")
+
+
+def get_nested_row_headings(groups: "BoundDimGroups"):
+    slices = [
+        descendent_slices
+        for splits, descendent_slices, anscestor_slices in groups.iter_divs_slices()
+    ]
+
+    def combs(cur_divs):
+        if not cur_divs:
+            return [[]]
+        head = cur_divs[0]
+        tail = cur_divs[1:]
+        return [[val] + comb for val in head for comb in combs(tail)]
+
+    combs_of_divs = combs(groups.divs)
+
+    for idx, comb in enumerate(combs_of_divs):
+        row_heading = []
+        for slice, div in zip(slices, comb):
+            if idx % slice == 0:
+                row_heading.append((div, slice))
+            else:
+                row_heading.append(None)
+        yield row_heading
+
+
+def write_row_heading(row_heading, outf):
+    for level in row_heading:
+        if level is None:
+            outf.write(" & ")
+            continue
+        div, slice = level
+        outf.write("\\multirow{{{}}}{{*}}{{{}}} & ".format(slice, div))
+
+
+def fixup_lists(v):
+    if isinstance(v, list):
+        return tuple(v)
+    return v
+
+
+def key_highlights(highlights):
+    highlights_keyed = set()
+    for highlight in highlights:
+        highlights_keyed.add(
+            tuple(sorted((k, fixup_lists(v)) for k, v in highlight.items()))
+        )
+    return highlights_keyed

@@ -5,23 +5,13 @@ from pylatex import Document, NoEscape, Package
 
 from expcomb.doc_utils import pk
 from expcomb.filter import empty_filter
-from .utils import docs_from_dbs, highlights_from_dbs
+from .utils import docs_from_dbs, highlights_from_dbs, key_highlights
 
 
-def fixup_lists(v):
-    if isinstance(v, list):
-        return tuple(v)
-    return v
-
-
-def indicate_highlights(docs, highlights, pk_extra):
-    highlights_keyed = set()
-    for highlight in highlights:
-        highlights_keyed.add(
-            tuple(sorted((k, fixup_lists(v)) for k, v in highlight.items()))
-        )
+def indicate_highlights(docs, highlights, pk_extra, key):
+    highlights_keyed = key_highlights(highlights)
     for doc in docs:
-        doc["highlight"] = pk(doc, pk_extra) in highlights_keyed
+        doc[key] = pk(doc, pk_extra) in highlights_keyed
 
 
 def add_tables(group, tables_tpls, pk_extra):
@@ -51,8 +41,10 @@ def add_tables(group, tables_tpls, pk_extra):
             else:
                 filter = empty_filter
             docs = docs_from_dbs(db_paths, filter, pk_extra)
-            highlights = highlights_from_dbs(db_paths, filter)
-            indicate_highlights(docs, highlights, pk_extra)
+            highlights = highlights_from_dbs(db_paths, filter, "guesses")
+            maxs = highlights_from_dbs(db_paths, filter, "max")
+            indicate_highlights(docs, highlights, pk_extra, "highlight")
+            indicate_highlights(docs, maxs, pk_extra, "max")
 
             table_code = StringIO()
             table_code.write("\n% Table: {}\n".format(name))

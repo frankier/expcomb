@@ -5,6 +5,7 @@ from tinyrecord import transaction
 import pickle
 from networkx import DiGraph, Graph
 from networkx.algorithms.clique import find_cliques
+from collections import Counter
 
 
 @click.group()
@@ -146,10 +147,38 @@ def nsd_from_best(pairs_in, db, thresh):
         other_idx for idx in max_scores for other_idx in graph[idx]
     }
     logger.info("nsd_from_max: %s", nsd_from_max)
+    max_guesses = [docs[idx] for idx in max_scores]
     nsd_from_max_guesses = [docs[idx] for idx in nsd_from_max]
 
     with transaction(db) as tr:
-        tr.insert({"type": "highlight-guesses", "guesses": nsd_from_max_guesses})
+        tr.insert(
+            {
+                "type": "highlight-guesses",
+                "guesses": nsd_from_max_guesses,
+                "max": max_guesses,
+            }
+        )
+
+
+@disp.command("intersect-nsds")
+@click.argument("dbs", type=TinyDBParam(), nargs=-1)
+def intersect_nsds(dbs):
+    from expcomb.table.utils import key_highlights
+
+    counter = Counter()
+    for db in dbs:
+        db = list(db)
+        assert len(db) == 1
+        highlights = db[0]["guesses"]
+        for highlight in highlights:
+            del highlight["gold"]
+            del highlight["test-corpus"]
+            del highlight["train-corpus"]
+        keyed_highlights = key_highlights(highlights)
+        for key in keyed_highlights:
+            counter[key] += 1
+    for doc, count in counter.most_common():
+        print(f"{count}: {doc}")
 
 
 @disp.command("dump")

@@ -1,8 +1,10 @@
 import sys
+from functools import reduce
 from typing import Any, List, Optional, Tuple
 from abc import ABC, abstractmethod
 from pylatex.utils import NoEscape, escape_latex
 from .utils import (
+    get_divs,
     get_group_combs,
     get_attr_value_pairs,
     str_of_comb,
@@ -12,6 +14,8 @@ from .utils import (
     key_group_by,
     get_nested_headings,
     write_stratum_row,
+    get_nested_row_headings,
+    write_row_heading,
 )
 
 
@@ -94,13 +98,55 @@ class InvalidSpecException(Exception):
     pass
 
 
-class TableSpec:
+class Bindable:
+
+    def bind(self, *args):
+        return self.bound_class(self, *args)
+
+
+class TableSpec(Bindable):
 
     def print(self, *args, outf=sys.stdout):
         return self.bind(*args).print(outf)
 
-    def bind(self, *args):
-        return self.bound_class(self, *args)
+
+class BoundDimGroups:
+
+    def __init__(self, spec, docs, measure_headings=None):
+        self.spec = spec
+        self.docs = docs
+        self.inner = [gd.group for gd in self.spec.groups]
+        self.combs = get_group_combs(self.inner, self.docs)
+        self.kvs = get_attr_value_pairs(self.inner, self.docs)
+        self.divs = get_divs(self.spec.groups, self.kvs, measure_headings)
+
+    def iter_divs_slices(self):
+        anscestor_slices = 1
+        descendent_slices = reduce(lambda a, b: a * b, (len(div) for div in self.divs))
+        for splits in self.divs:
+            descendent_slices //= len(splits)
+            yield splits, descendent_slices, anscestor_slices
+            anscestor_slices *= len(splits)
+
+    def get_nested_headings(self) -> List[List[Tuple[str, int]]]:
+        return get_nested_headings(self)
+
+    def get_nested_row_headings(self) -> List[List[Tuple[str, int]]]:
+        return get_nested_row_headings(self)
+
+    def get_sep_slices(self, flat_headings):
+        if not flat_headings and self.spec.div_idx is not None:
+            return list(self.iter_divs_slices())[self.spec.div_idx][1]
+        else:
+            return len(self.combs)
+
+
+class DimGroups(Bindable):
+    bound_class = BoundDimGroups
+
+    def __init__(self, groups: List[LookupGroupDisplay], div_idx=None):
+        self.groups = groups
+        self.div_idx = div_idx
 
 
 class BoundSqTableSpec:
@@ -108,12 +154,8 @@ class BoundSqTableSpec:
     def __init__(self, spec: "SqTableSpec", docs, permissive=False):
         self.spec = spec
         self.docs = docs
-        self.x_inner_groups = [gd.group for gd in self.spec.x_groups]
-        self.y_inner_groups = [gd.group for gd in self.spec.y_groups]
-        self.x_combs = get_group_combs(self.x_inner_groups, self.docs)
-        self.y_combs = get_group_combs(self.y_inner_groups, self.docs)
-        self.x_group_kvs = get_attr_value_pairs(self.x_inner_groups, self.docs)
-        self.y_group_kvs = get_attr_value_pairs(self.y_inner_groups, self.docs)
+        self.x_groups = self.spec.x_groups.bind(docs)
+        self.y_groups = self.spec.y_groups.bind(docs)
         if self.spec.highlight is box_highlight:
             assert (
                 permissive or all(("highlight" in doc for doc in docs))
@@ -123,33 +165,63 @@ class BoundSqTableSpec:
                 permissive or not any(("highlight" in doc for doc in docs))
             ), "Highlights found when not included in spec"
 
-    def get_nested_headings(self) -> List[List[Tuple[str, int]]]:
-        return get_nested_headings(self.spec.y_groups, self.y_group_kvs)
-
     def print(self, outf=sys.stdout):
-        outf.write(r"\begin{tabular}{ l " + "r " * len(self.y_combs) + "}\n")
+        if self.spec.flat_headings:
+            row_headings_columns = "l "
+        else:
+            row_headings_columns = "l " * len(self.spec.x_groups.groups)
+        col_headings = ""
+        y_sep_slices = self.y_groups.get_sep_slices(self.spec.flat_headings)
+        for idx in range(len(self.y_groups.combs)):
+            if idx > 0 and idx % y_sep_slices == 0:
+                col_headings += "| "
+            col_headings += "r "
+        x_sep_slices = self.x_groups.get_sep_slices(self.spec.flat_headings)
+        outf.write(r"\begin{tabular}{ " + row_headings_columns + col_headings + "}\n")
         outf.write("\\toprule\n")
         if self.spec.flat_headings:
             outf.write(" & ")
             outf.write(
                 " & ".join(
-                    (escape_latex(str_of_comb(y_comb)) for y_comb in self.y_combs)
+                    (
+                        escape_latex(str_of_comb(y_comb))
+                        for y_comb in self.y_groups.combs
+                    )
                 )
                 + " \\\\\n"
             )
         else:
-            headers = self.get_nested_headings()
+            headers = self.y_groups.get_nested_headings()
+            sep_slices = None
             for stratum_idx, stratum in enumerate(headers):
-                outf.write("& ")
-                write_stratum_row(stratum, outf)
-        for x_comb in self.x_combs:
-            outf.write(escape_latex(str_of_comb(x_comb)) + " & ")
-            for col_num, y_comb in enumerate(self.y_combs):
+                outf.write("& " * len(self.spec.x_groups.groups))
+                if sep_slices is not None:
+                    sep_slices *= len(self.y_groups.divs[stratum_idx])
+                if stratum_idx == self.spec.y_groups.div_idx:
+                    sep_slices = 1
+                write_stratum_row(stratum, outf, sep_slices)
+        row_headings = self.x_groups.get_nested_row_headings()
+        for row_num, (x_comb, row_heading) in enumerate(
+            zip(self.x_groups.combs, row_headings)
+        ):
+            if (
+                not self.spec.flat_headings
+                and row_num > 0
+                and row_num % x_sep_slices == 0
+            ):
+                outf.write("\\hline\n")
+            if self.spec.flat_headings:
+                outf.write(escape_latex(str_of_comb(x_comb)) + " & ")
+            else:
+                write_row_heading(row_heading, outf)
+            for col_num, y_comb in enumerate(self.y_groups.combs):
                 opts = dict(x_comb + y_comb)
                 picked_doc = get_docs(self.docs, opts, [], permissive=True)
                 if len(picked_doc) == 1:
                     if picked_doc[0].get("highlight"):
                         outf.write("\\cellcolor{blue!10}")
+                    if picked_doc[0].get("max"):
+                        outf.write("\\textbf{")
                     outf.write(
                         escape_latex(
                             str(
@@ -160,9 +232,11 @@ class BoundSqTableSpec:
                             )
                         )
                     )
+                    if picked_doc[0].get("max"):
+                        outf.write("}")
                 else:
                     outf.write("---")
-                if col_num < len(self.y_combs) - 1:
+                if col_num < len(self.y_groups.combs) - 1:
                     outf.write(" & ")
             outf.write(" \\\\\n")
         outf.write("\\bottomrule\n")
@@ -177,8 +251,8 @@ class SqTableSpec(TableSpec):
 
     def __init__(
         self,
-        x_groups: List[LookupGroupDisplay],
-        y_groups: List[LookupGroupDisplay],
+        x_groups: DimGroups,
+        y_groups: DimGroups,
         measure: Measure,
         highlight=None,
         flat_headings: bool = False,
