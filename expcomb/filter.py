@@ -7,6 +7,11 @@ class SimpleFilter:
         self.path = path
         self.opt_dict = opt_dict
 
+    def doc_included(self, d_path, d_opts):
+        return all((d_bit == q_bit for d_bit, q_bit in zip(d_path, self.path))) and all(
+            (d_opts.get(opt) == self.opt_dict[opt] for opt in self.opt_dict)
+        )
+
     def intersect_opts(self, **opt_dict):
         return SimpleFilter(*self.path, **self.opt_dict, **opt_dict)
 
@@ -15,6 +20,24 @@ class SimpleFilter:
             " ".join(self.path),
             ", ".join(("{}={}".format(k, repr(v)) for k, v in self.opt_dict.items())),
         )
+
+
+class AndFilter:
+
+    def __init__(self, *args):
+        self.args = args
+
+    def doc_included(self, d_path, d_opts):
+        return all((arg.doc_included(d_path, d_opts) for arg in self.args))
+
+
+class OrFilter:
+
+    def __init__(self, *args):
+        self.args = args
+
+    def doc_included(self, d_path, d_opts):
+        return any((arg.doc_included(d_path, d_opts) for arg in self.args))
 
 
 empty_filter = SimpleFilter()

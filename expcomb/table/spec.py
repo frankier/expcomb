@@ -119,14 +119,19 @@ class BoundDimGroups:
         self.combs = get_group_combs(self.inner, self.docs)
         self.kvs = get_attr_value_pairs(self.inner, self.docs)
         self.divs = get_divs(self.spec.groups, self.kvs, measure_headings)
+        self._divs_slices = None
 
-    def iter_divs_slices(self):
+    def divs_slices(self):
+        if self._divs_slices is not None:
+            return self._divs_slices
         anscestor_slices = 1
         descendent_slices = reduce(lambda a, b: a * b, (len(div) for div in self.divs))
+        self._divs_slices = []
         for splits in self.divs:
             descendent_slices //= len(splits)
-            yield splits, descendent_slices, anscestor_slices
+            self._divs_slices.append((splits, descendent_slices, anscestor_slices))
             anscestor_slices *= len(splits)
+        return self._divs_slices
 
     def get_nested_headings(self) -> List[List[Tuple[str, int]]]:
         return get_nested_headings(self)
@@ -136,9 +141,16 @@ class BoundDimGroups:
 
     def get_sep_slices(self, flat_headings):
         if not flat_headings and self.spec.div_idx is not None:
-            return list(self.iter_divs_slices())[self.spec.div_idx][1]
+            return self.divs_slices()[self.spec.div_idx][1]
         else:
             return len(self.combs)
+
+    def min_div_idx(self, idx):
+        divs_slices = self.divs_slices()
+        for div_idx in range(self.spec.div_idx, -1, -1):
+            if idx % divs_slices[div_idx][1] != 0:
+                return div_idx + 1
+        return 0
 
 
 class DimGroups(Bindable):
@@ -209,7 +221,14 @@ class BoundSqTableSpec:
                 and row_num > 0
                 and row_num % x_sep_slices == 0
             ):
-                outf.write("\\hline\n")
+                min_div_idx = self.x_groups.min_div_idx(row_num)
+                outf.write(
+                    "\\cline{"
+                    + str(min_div_idx + 1)
+                    + "-"
+                    + str(len(self.x_groups.divs) + len(self.y_groups.combs))
+                    + "}\n"
+                )
             if self.spec.flat_headings:
                 outf.write(escape_latex(str_of_comb(x_comb)) + " & ")
             else:
@@ -270,12 +289,10 @@ class BoundSumTableSpec:
     def __init__(self, spec: "SumTableSpec", docs):
         self.spec = spec
         self.docs = docs
-        self.inner_groups = [gd.group for gd in self.spec.groups]
-        self.combs = get_group_combs(self.inner_groups, self.docs)
-        self.group_kvs = get_attr_value_pairs(self.inner_groups, self.docs)
+        self.groups = self.spec.groups.bind(docs)
 
     def get_combs_headings(self):
-        return [str_of_comb(comb) for comb in self.combs]
+        return [str_of_comb(comb) for comb in self.groups.combs]
 
     def get_measure_headings(self):
         return self.spec.measure.get_titles()
@@ -293,18 +310,16 @@ class BoundSumTableSpec:
             return combs_headings
 
     def get_nested_headings(self) -> List[List[Tuple[str, int]]]:
-        return get_nested_headings(
-            self.spec.groups, self.group_kvs, self.get_measure_headings()
-        )
+        return get_nested_headings(self.groups)
 
     def comb_order_docs(self, inner_docs) -> List[Tuple[Any, int]]:
         result: List[Tuple[Any, int]] = []
-        if self.combs:
+        if self.groups.combs:
             span = 1
             found = False
-            for max_depth in range(len(self.inner_groups), -1, -1):
+            for max_depth in range(len(self.groups.inner), -1, -1):
                 combs = get_group_combs(
-                    self.inner_groups, self.docs, max_depth=max_depth
+                    self.groups.inner, self.docs, max_depth=max_depth
                 )
                 docs = []
                 got_any = False
@@ -312,7 +327,7 @@ class BoundSumTableSpec:
                     found_docs = get_docs(
                         inner_docs,
                         dict(comb),
-                        [grp.get_cat() for grp in self.inner_groups[max_depth:]],
+                        [grp.get_cat() for grp in self.groups.inner[max_depth:]],
                         permissive=True,
                     )
                     if len(found_docs) == 1:
@@ -325,7 +340,7 @@ class BoundSumTableSpec:
                     found = True
                     break
                 if max_depth > 0:
-                    span *= len(self.group_kvs[max_depth - 1][1])
+                    span *= len(self.groups.kvs[max_depth - 1][1])
             if not found:
                 result.append((None, span))
         else:
@@ -407,10 +422,7 @@ class SumTableSpec(TableSpec):
     bound_class = BoundSumTableSpec
 
     def __init__(
-        self,
-        groups: List[LookupGroupDisplay],
-        measure: Measure,
-        flat_headings: bool = False,
+        self, groups: DimGroups, measure: Measure, flat_headings: bool = False
     ):
         self.groups = groups
         self.measure = measure

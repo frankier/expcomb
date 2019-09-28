@@ -54,9 +54,7 @@ def mk_iden(corpus, exp):
 
 
 def doc_exp_included(q_filter: SimpleFilter, d_path, d_opts):
-    return all((d_bit == q_bit for d_bit, q_bit in zip(d_path, q_filter.path))) and all(
-        (d_opts.get(opt) == q_filter.opt_dict[opt] for opt in q_filter.opt_dict)
-    )
+    return q_filter.doc_included(d_path, d_opts)
 
 
 def filter_experiments(experiments, filter: SimpleFilter):

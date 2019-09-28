@@ -76,7 +76,11 @@ def get_attr_value_pairs(spec: List["Grouping"], docs):
 
 def docs_from_dbs(db_paths, filter, pk_extra):
     docs = all_docs_from_dbs(db_paths, pk_extra)
-    return [doc for doc in docs if doc_exp_included(filter, doc["path"], doc)]
+    return [
+        doc
+        for doc in docs
+        if doc_exp_included(filter, doc["path"], {**doc, **doc["opts"]})
+    ]
 
 
 def highlights_from_dbs(db_paths, filter, key):
@@ -144,7 +148,7 @@ def get_divs(groups, group_kvs, measure_headings=None):
 
 def get_nested_headings(groups: "BoundDimGroups") -> List[List[Tuple[str, int]]]:
     res: List[List[Tuple[str, int]]] = []
-    for splits, descendent_slices, anscestor_slices in groups.iter_divs_slices():
+    for splits, descendent_slices, anscestor_slices in groups.divs_slices():
         stratum: List[Tuple[str, int]] = []
         for _ in range(anscestor_slices):
             for split in splits:
@@ -157,7 +161,7 @@ def write_stratum_row(stratum, outf, sep_slices=None):
     for label_idx, (label, span) in enumerate(stratum):
         if label_idx != 0:
             outf.write("& ")
-        if label_idx > 0 and label_idx % sep_slices == 0:
+        if sep_slices is not None and label_idx > 0 and label_idx % sep_slices == 0:
             line = "|"
         else:
             line = ""
@@ -168,7 +172,7 @@ def write_stratum_row(stratum, outf, sep_slices=None):
 def get_nested_row_headings(groups: "BoundDimGroups"):
     slices = [
         descendent_slices
-        for splits, descendent_slices, anscestor_slices in groups.iter_divs_slices()
+        for splits, descendent_slices, anscestor_slices in groups.divs_slices()
     ]
 
     def combs(cur_divs):

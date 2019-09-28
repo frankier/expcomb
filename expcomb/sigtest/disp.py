@@ -173,7 +173,8 @@ def intersect_nsds(dbs):
         for highlight in highlights:
             del highlight["gold"]
             del highlight["test-corpus"]
-            del highlight["train-corpus"]
+            if "train-corpus" in highlight:
+                del highlight["train-corpus"]
         keyed_highlights = key_highlights(highlights)
         for key in keyed_highlights:
             counter[key] += 1
@@ -186,13 +187,13 @@ def intersect_nsds(dbs):
 def dump(pairs_in):
     pvalmat, orig_scores, docs = load_pairs_in(pairs_in)
     logger.info("** pvalmat **")
-    for row in pvalmat:
-        logger.info("%s", row)
+    for idx_a, idx_b, b_bigger, p_val in iter_all_pairs_cmp(pvalmat):
+        logger.info("%s %s %s: %s", idx_a, idx_b, b_bigger, p_val)
     logger.info("** orig_scores **")
     logger.info("%s", orig_scores)
     logger.info("** docs **")
-    for doc in docs:
-        logger.info("%s", doc)
+    for idx, doc in enumerate(docs):
+        logger.info("%s: %s", idx, doc)
 
 
 if __name__ == "__main__":
