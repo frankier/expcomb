@@ -2,7 +2,7 @@ import numpy as np
 import pickle
 import click
 from memory_tempfile import MemoryTempfile
-from abc import ABC, abstractclassmethod
+from abc import ABC, abstractmethod
 import functools
 from expcomb.utils import TinyDBParam
 from expcomb.doc_utils import pk
@@ -123,12 +123,11 @@ def compare_resampled_inner(docs, outf, extra_pk):
 
 class Bootstrapper(ABC):
 
-    @abstractclassmethod
-    def score_one(cls, gold, guess):
+    @abstractmethod
+    def score_one(self, gold, guess):
         pass
 
-    @classmethod
-    def create_score_dist(cls, gold, guess, schedule):
+    def create_score_dist(self, gold, guess, schedule):
         guess_lines = open(guess).readlines()
 
         dist = []
@@ -139,17 +138,15 @@ class Bootstrapper(ABC):
             for sample_idx in resample:
                 boot.write(guess_lines[sample_idx])
             boot.flush()
-            dist.append(cls.score_one(gold, boot.name))
+            dist.append(self.score_one(gold, boot.name))
         return dist
 
-    @classmethod
-    def create_schedule(cls, gold, bootstrap_iters=1000, seed=None):
-        return cls.create_schedule_from_size(
+    def create_schedule(self, gold, bootstrap_iters=1000, seed=None):
+        return self.create_schedule_from_size(
             len(open(gold).readlines()), bootstrap_iters, seed
         )
 
-    @classmethod
-    def create_schedule_from_size(cls, size, bootstrap_iters=1000, seed=None):
+    def create_schedule_from_size(self, size, bootstrap_iters=1000, seed=None):
         if seed is not None:
             np.random.seed(seed)
         for _ in range(bootstrap_iters):
