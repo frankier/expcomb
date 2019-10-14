@@ -85,24 +85,24 @@ def mk_compare_resampled(inner):
 
     @functools.wraps(inner)
     def wrapper(ctx, *args, **kwargs):
-        docs, outf, extra_pk = inner(*args, **kwargs)
-        compare_resampled_inner(docs, outf, extra_pk)
+        docs, outf = inner(*args, **kwargs)
+        compare_resampled_inner(docs, outf)
 
     return bootstrap.command("compare-resampled")(click.pass_context(wrapper))
 
 
-def simple_compare_resampled(extra_pk):
+def simple_compare_resampled():
 
     @mk_compare_resampled
     @click.argument("docs", type=click.File("rb"), nargs=-1)
     @click.argument("outf", type=TinyDBParam())
     def res(docs, outf):
-        return docs, outf, extra_pk
+        return docs, outf
 
     return res
 
 
-def compare_resampled_inner(docs, outf, extra_pk):
+def compare_resampled_inner(docs, outf):
     docs = [pickle.load(doc) for doc in docs]
     resamples = []
     for doc in docs:
