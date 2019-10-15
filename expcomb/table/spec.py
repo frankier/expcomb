@@ -375,11 +375,15 @@ class BoundSumTableSpec:
         )
         outf.write("\\toprule\n")
         if self.spec.flat_headings:
-            outf.write(r"System & Variant & " + " & ".join(flat_headers) + " \\\\")
+            outf.write("System & ")
+            if self.spec.two_levels:
+                outf.write("Variant & ")
+            outf.write(" & ".join(flat_headers) + " \\\\")
         else:
             headers = self.get_nested_headings()
             outf.write("\\multirow{{{}}}{{*}}{{System}} & ".format(len(headers)))
-            outf.write("\\multirow{{{}}}{{*}}{{Variant}} & ".format(len(headers)))
+            if self.spec.two_levels:
+                outf.write("\\multirow{{{}}}{{*}}{{Variant}} & ".format(len(headers)))
             for stratum_idx, stratum in enumerate(headers):
                 if stratum_idx >= 1:
                     outf.write("& & ")
@@ -392,21 +396,25 @@ class BoundSumTableSpec:
             if path_idx > 0:
                 outf.write("\\midrule\n")
             doc_groups = list(key_group_by(outer_docs, lambda doc: doc["disp"]))
-            prefix = (
-                r"\multirow{"
-                + str(len(doc_groups))
-                + "}{*}{"
-                + " ".join(p.title() for p in path)
-                + "}"
-            )
-            padding = len(prefix)
-            outf.write(prefix)
+            if self.spec.two_levels:
+                prefix = (
+                    r"\multirow{"
+                    + str(len(doc_groups))
+                    + "}{*}{"
+                    + " ".join(p.title() for p in path)
+                    + "}"
+                )
+                padding = len(prefix)
+                outf.write(prefix)
+            else:
+                padding = 0
             for idx, (disp, inner_docs) in enumerate(doc_groups):
                 if idx != 0:
                     outf.write(" " * padding)
+                if self.spec.two_levels:
+                    outf.write(r" & ")
                 outf.write(
-                    r" & "
-                    + escape_latex(disp)
+                    escape_latex(disp)
                     + " & "
                     + " & ".join(
                         "\\multicolumn{{{}}}{{c}}{{{}}}".format(span, disp_num(n))
@@ -427,8 +435,10 @@ class SumTableSpec(TableSpec):
         measure: Measure,
         displayer=None,
         flat_headings: bool = False,
+        two_levels: bool = True,
     ):
         self.groups = groups
         self.measure = measure
         self.displayer = displayer or (lambda x: x)
         self.flat_headings = flat_headings
+        self.two_levels = two_levels
