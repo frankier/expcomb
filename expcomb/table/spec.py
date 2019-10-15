@@ -356,7 +356,7 @@ class BoundSumTableSpec:
                 if measure is None:
                     return NoEscape("---")
                 else:
-                    return measure
+                    return self.spec.displayer(measure)
 
             return (get_measure(m) for m in self.spec.measure.get_measures())
         else:
@@ -422,8 +422,13 @@ class SumTableSpec(TableSpec):
     bound_class = BoundSumTableSpec
 
     def __init__(
-        self, groups: DimGroups, measure: Measure, flat_headings: bool = False
+        self,
+        groups: DimGroups,
+        measure: Measure,
+        displayer=None,
+        flat_headings: bool = False,
     ):
         self.groups = groups
         self.measure = measure
+        self.displayer = displayer or (lambda x: x)
         self.flat_headings = flat_headings
