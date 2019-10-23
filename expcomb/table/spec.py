@@ -339,7 +339,6 @@ class BoundSumDimGroups(BoundDimGroupsBase):
                 if self.spec.two_levels:
                     row_head.append(r" & ")
                 row_head.append(escape_latex(disp) + " & ")
-                print("inner_docs", inner_docs)
                 yield row_idx, InFilter(inner_docs), "".join(row_head)
             row_idx += 1
 
