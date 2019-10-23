@@ -76,6 +76,10 @@ def get_attr_value_pairs(spec: List["Grouping"], docs):
 
 def docs_from_dbs(db_paths, filter, pk_extra):
     docs = all_docs_from_dbs(db_paths, pk_extra)
+    return filter_docs(docs, filter)
+
+
+def filter_docs(docs, filter):
     return [
         doc
         for doc in docs
@@ -157,16 +161,18 @@ def get_nested_headings(groups: "BoundDimGroups") -> List[List[Tuple[str, int]]]
     return res
 
 
-def write_stratum_row(stratum, outf, sep_slices=None):
+def stratum_row_latex(stratum, sep_slices=None):
+    res = []
     for label_idx, (label, span) in enumerate(stratum):
         if label_idx != 0:
-            outf.write("& ")
+            res.append("& ")
         if sep_slices is not None and label_idx > 0 and label_idx % sep_slices == 0:
             line = "|"
         else:
             line = ""
-        outf.write("\\multicolumn{{{}}}{{{}c}}{{{}}} ".format(span, line, label))
-    outf.write(" \\\\\n")
+        res.append("\\multicolumn{{{}}}{{{}c}}{{{}}} ".format(span, line, label))
+    res.append(" \\\\\n")
+    return "".join(res)
 
 
 def get_nested_row_headings(groups: "BoundDimGroups"):
@@ -194,13 +200,15 @@ def get_nested_row_headings(groups: "BoundDimGroups"):
         yield row_heading
 
 
-def write_row_heading(row_heading, outf):
+def row_heading_latex(row_heading):
+    res = []
     for level in row_heading:
         if level is None:
-            outf.write(" & ")
+            res.append(" & ")
             continue
         div, slice = level
-        outf.write("\\multirow{{{}}}{{*}}{{{}}} & ".format(slice, div))
+        res.append("\\multirow{{{}}}{{*}}{{{}}} & ".format(slice, div))
+    return "".join(res)
 
 
 def fixup_lists(v):

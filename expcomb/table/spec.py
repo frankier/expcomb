@@ -3,6 +3,7 @@ from functools import reduce
 from typing import Any, List, Optional, Tuple
 from abc import ABC, abstractmethod
 from pylatex.utils import NoEscape, escape_latex
+from expcomb.filter import SimpleFilter, AndFilter, InFilter
 from .utils import (
     get_divs,
     get_group_combs,
@@ -13,9 +14,10 @@ from .utils import (
     disp_num,
     key_group_by,
     get_nested_headings,
-    write_stratum_row,
+    stratum_row_latex,
     get_nested_row_headings,
-    write_row_heading,
+    row_heading_latex,
+    filter_docs,
 )
 
 
@@ -56,7 +58,7 @@ class LookupGroupDisplay:
         if mapped:
             return mapped
         else:
-            return self.group.get_cat() + "=" + str(v)
+            return escape_latex(self.group.get_cat() + "=" + str(v))
 
 
 class Measure(ABC):
@@ -110,7 +112,19 @@ class TableSpec(Bindable):
         return self.bind(*args).print(outf)
 
 
-class BoundDimGroups:
+class BoundDimGroupsBase:
+
+    def get_sep_slices(self, flat_headings):
+        return self.num_combs()
+
+    def num_combs(self):
+        return len(self.combs)
+
+    def num_tiers(self):
+        return 1
+
+
+class BoundDimGroups(BoundDimGroupsBase):
 
     def __init__(self, spec, docs, measure_headings=None):
         self.spec = spec
@@ -152,12 +166,53 @@ class BoundDimGroups:
                 return div_idx + 1
         return 0
 
+    def iter_filters(self):
+        for comb in self.combs:
+            yield SimpleFilter(**dict(comb))
+
+    def iter_rows_heads(self):
+        row_headings = self.get_nested_row_headings()
+        for row_num, (comb, filter, row_heading) in enumerate(
+            zip(self.combs, self.iter_filters(), row_headings)
+        ):
+            if self.spec.flat_headings:
+                head_latex = escape_latex(str_of_comb(comb)) + " & "
+            else:
+                head_latex = row_heading_latex(row_heading)
+            yield row_num, filter, head_latex
+
+    def col_heads_latex(self, x_tiers):
+        res = []
+        if self.spec.flat_headings:
+            res.append(" & " * x_tiers)
+            res.append(
+                " & ".join((escape_latex(str_of_comb(y_comb)) for y_comb in self.combs))
+                + " \\\\\n"
+            )
+        else:
+            headers = self.get_nested_headings()
+            sep_slices = None
+            for stratum_idx, stratum in enumerate(headers):
+                res.append("& " * x_tiers)
+                if sep_slices is not None:
+                    sep_slices *= len(self.divs[stratum_idx])
+                if stratum_idx == self.spec.div_idx:
+                    sep_slices = 1
+                res.append(stratum_row_latex(stratum, sep_slices))
+        return "".join(res)
+
+    def num_tiers(self):
+        return len(self.spec.groups)
+
 
 class DimGroups(Bindable):
     bound_class = BoundDimGroups
 
-    def __init__(self, groups: List[LookupGroupDisplay], div_idx=None):
+    def __init__(
+        self, groups: List[LookupGroupDisplay], flat_headings=False, div_idx=None
+    ):
         self.groups = groups
+        self.flat_headings = flat_headings
         self.div_idx = div_idx
 
 
@@ -168,54 +223,23 @@ class BoundSqTableSpec:
         self.docs = docs
         self.x_groups = self.spec.x_groups.bind(docs)
         self.y_groups = self.spec.y_groups.bind(docs)
-        if self.spec.highlight is box_highlight:
-            assert (
-                permissive or all(("highlight" in doc for doc in docs))
-            ), "No highlights found even though included in spec"
-        else:
-            assert (
-                permissive or not any(("highlight" in doc for doc in docs))
-            ), "Highlights found when not included in spec"
 
     def print(self, outf=sys.stdout):
         if self.spec.flat_headings:
             row_headings_columns = "l "
         else:
-            row_headings_columns = "l " * len(self.spec.x_groups.groups)
+            row_headings_columns = "l " * self.x_groups.num_tiers()
         col_headings = ""
         y_sep_slices = self.y_groups.get_sep_slices(self.spec.flat_headings)
-        for idx in range(len(self.y_groups.combs)):
+        for idx in range(self.y_groups.num_combs()):
             if idx > 0 and idx % y_sep_slices == 0:
                 col_headings += "| "
             col_headings += "r "
         x_sep_slices = self.x_groups.get_sep_slices(self.spec.flat_headings)
         outf.write(r"\begin{tabular}{ " + row_headings_columns + col_headings + "}\n")
         outf.write("\\toprule\n")
-        if self.spec.flat_headings:
-            outf.write(" & ")
-            outf.write(
-                " & ".join(
-                    (
-                        escape_latex(str_of_comb(y_comb))
-                        for y_comb in self.y_groups.combs
-                    )
-                )
-                + " \\\\\n"
-            )
-        else:
-            headers = self.y_groups.get_nested_headings()
-            sep_slices = None
-            for stratum_idx, stratum in enumerate(headers):
-                outf.write("& " * len(self.spec.x_groups.groups))
-                if sep_slices is not None:
-                    sep_slices *= len(self.y_groups.divs[stratum_idx])
-                if stratum_idx == self.spec.y_groups.div_idx:
-                    sep_slices = 1
-                write_stratum_row(stratum, outf, sep_slices)
-        row_headings = self.x_groups.get_nested_row_headings()
-        for row_num, (x_comb, row_heading) in enumerate(
-            zip(self.x_groups.combs, row_headings)
-        ):
+        outf.write(self.y_groups.col_heads_latex(self.x_groups.num_tiers()))
+        for row_num, x_filter, head_latex in self.x_groups.iter_rows_heads():
             if (
                 not self.spec.flat_headings
                 and row_num > 0
@@ -226,16 +250,13 @@ class BoundSqTableSpec:
                     "\\cline{"
                     + str(min_div_idx + 1)
                     + "-"
-                    + str(len(self.x_groups.divs) + len(self.y_groups.combs))
+                    + str(len(self.x_groups.divs) + self.y_groups.num_combs())
                     + "}\n"
                 )
-            if self.spec.flat_headings:
-                outf.write(escape_latex(str_of_comb(x_comb)) + " & ")
-            else:
-                write_row_heading(row_heading, outf)
-            for col_num, y_comb in enumerate(self.y_groups.combs):
-                opts = dict(x_comb + y_comb)
-                picked_doc = get_docs(self.docs, opts, [], permissive=True)
+            outf.write(head_latex)
+            for col_num, y_filter in enumerate(self.y_groups.iter_filters()):
+                opts = AndFilter(x_filter, y_filter)
+                picked_doc = filter_docs(self.docs, opts)
                 if len(picked_doc) == 1:
                     if picked_doc[0].get("highlight"):
                         outf.write("\\cellcolor{blue!10}")
@@ -255,7 +276,7 @@ class BoundSqTableSpec:
                         outf.write("}")
                 else:
                     outf.write("---")
-                if col_num < len(self.y_groups.combs) - 1:
+                if col_num < self.y_groups.num_combs() - 1:
                     outf.write(" & ")
             outf.write(" \\\\\n")
         outf.write("\\bottomrule\n")
@@ -284,11 +305,97 @@ class SqTableSpec(TableSpec):
         self.highlight = highlight
 
 
+class BoundSumDimGroups(BoundDimGroupsBase):
+
+    def __init__(self, spec, docs):
+        self.spec = spec
+        self.docs = docs
+
+    def iter_rows_heads(self):
+        row_idx = 0
+        for path_idx, (path, outer_docs) in enumerate(
+            key_group_by(self.docs, lambda doc: doc["path"])
+        ):
+            row_head = []
+            if path_idx > 0 and self.spec.two_levels:
+                row_head.append("\\midrule\n")
+            doc_groups = list(key_group_by(outer_docs, lambda doc: doc["disp"]))
+            if self.spec.two_levels:
+                prefix = (
+                    r"\multirow{"
+                    + str(len(doc_groups))
+                    + "}{*}{"
+                    + " ".join(p.title() for p in path)
+                    + "}"
+                )
+                padding = len(prefix)
+                row_head.append(prefix)
+            else:
+                padding = 0
+            for idx, (disp, inner_docs) in enumerate(doc_groups):
+                if idx != 0:
+                    row_head = []
+                    row_head.append(" " * padding)
+                if self.spec.two_levels:
+                    row_head.append(r" & ")
+                row_head.append(escape_latex(disp) + " & ")
+                print("inner_docs", inner_docs)
+                yield row_idx, InFilter(inner_docs), "".join(row_head)
+            row_idx += 1
+
+
+class SumDimGroups(Bindable):
+    bound_class = BoundSumDimGroups
+
+    def __init__(self, two_levels=False):
+        self.two_levels = two_levels
+
+    def num_tiers(self):
+        if self.two_levels:
+            return 2
+        else:
+            return 1
+
+
+class BoundSelectDimGroups(BoundDimGroupsBase):
+
+    def __init__(self, spec, docs):
+        self.spec = spec
+        self.docs = docs
+
+    def col_heads_latex(self, x_tiers):
+        return (
+            " & "
+            * x_tiers
+            + " & ".join((disp for disp, filter in self.spec.selected))
+            + " \\\\\n"
+        )
+
+    def iter_rows_heads(self):
+        for row_idx, (disp, filter) in enumerate(self.spec.selected):
+            yield row_idx, filter, disp + " & "
+
+    def iter_filters(self):
+        for disp, filter in self.spec.selected:
+            yield filter
+
+    def num_combs(self):
+        return len(self.spec.selected)
+
+
+class SelectDimGroups(Bindable):
+    bound_class = BoundSelectDimGroups
+
+    def __init__(self, *selected):
+        self.selected = selected
+
+
 class BoundSumTableSpec:
 
     def __init__(self, spec: "SumTableSpec", docs):
         self.spec = spec
         self.docs = docs
+        self.x_groups = self.spec.x_groups.bind(docs)
         self.groups = self.spec.groups.bind(docs)
 
     def get_combs_headings(self):
@@ -376,52 +483,35 @@ class BoundSumTableSpec:
         outf.write("\\toprule\n")
         if self.spec.flat_headings:
             outf.write("System & ")
-            if self.spec.two_levels:
+            if self.x_groups.num_tiers() == 2:
                 outf.write("Variant & ")
             outf.write(" & ".join(flat_headers) + " \\\\")
         else:
             headers = self.get_nested_headings()
             outf.write("\\multirow{{{}}}{{*}}{{System}} & ".format(len(headers)))
-            if self.spec.two_levels:
+            if self.x_groups.num_tiers() == 2:
                 outf.write("\\multirow{{{}}}{{*}}{{Variant}} & ".format(len(headers)))
             for stratum_idx, stratum in enumerate(headers):
                 if stratum_idx >= 1:
-                    outf.write("& & ")
-                write_stratum_row(stratum, outf)
+                    if self.x_groups.num_tiers() == 2:
+                        outf.write("& & ")
+                    else:
+                        outf.write("& ")
+                outf.write(stratum_row_latex(stratum))
         outf.write("\\midrule\n")
-        padding = 0
-        for path_idx, (path, outer_docs) in enumerate(
-            key_group_by(self.docs, lambda doc: doc["path"])
-        ):
-            if path_idx > 0:
-                outf.write("\\midrule\n")
-            doc_groups = list(key_group_by(outer_docs, lambda doc: doc["disp"]))
-            if self.spec.two_levels:
-                prefix = (
-                    r"\multirow{"
-                    + str(len(doc_groups))
-                    + "}{*}{"
-                    + " ".join(p.title() for p in path)
-                    + "}"
+
+        for row_num, x_filter, head_latex in self.x_groups.iter_rows_heads():
+            # if path_idx > 0 and self.spec.two_levels:
+            # outf.write("\\midrule\n")
+            outf.write(head_latex)
+            inner_docs = filter_docs(self.docs, x_filter)
+            outf.write(
+                " & ".join(
+                    "\\multicolumn{{{}}}{{c}}{{{}}}".format(span, disp_num(n))
+                    for n, span in self.get_nums(inner_docs)
                 )
-                padding = len(prefix)
-                outf.write(prefix)
-            else:
-                padding = 0
-            for idx, (disp, inner_docs) in enumerate(doc_groups):
-                if idx != 0:
-                    outf.write(" " * padding)
-                if self.spec.two_levels:
-                    outf.write(r" & ")
-                outf.write(
-                    escape_latex(disp)
-                    + " & "
-                    + " & ".join(
-                        "\\multicolumn{{{}}}{{c}}{{{}}}".format(span, disp_num(n))
-                        for n, span in self.get_nums(inner_docs)
-                    )
-                    + " \\\\\n"
-                )
+                + " \\\\\n"
+            )
         outf.write("\\bottomrule\n")
         outf.write("\\end{tabu}")
 
@@ -431,14 +521,14 @@ class SumTableSpec(TableSpec):
 
     def __init__(
         self,
+        x_groups: DimGroups,
         groups: DimGroups,
         measure: Measure,
         displayer=None,
         flat_headings: bool = False,
-        two_levels: bool = True,
     ):
+        self.x_groups = x_groups
         self.groups = groups
         self.measure = measure
         self.displayer = displayer or (lambda x: x)
         self.flat_headings = flat_headings
-        self.two_levels = two_levels

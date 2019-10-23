@@ -10,7 +10,16 @@ def pk(doc, pk_extra):
         pk_doc.update(doc["opts"])
     if pk_extra is not None:
         pk_doc.update(pk_extra(doc))
-    return tuple(sorted(pk_doc.items()))
+    return freeze(pk_doc)
+
+
+def freeze(tree):
+    if isinstance(tree, dict):
+        return tuple(((k, freeze(v)) for k, v in sorted(tree.items())))
+    elif isinstance(tree, list):
+        return tuple((freeze(v) for v in tree))
+    else:
+        return tree
 
 
 def all_docs(dbs):

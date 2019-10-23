@@ -1,4 +1,5 @@
 from typing import Optional
+from .doc_utils import freeze
 
 
 class SimpleFilter:
@@ -38,6 +39,15 @@ class OrFilter:
 
     def doc_included(self, d_path, d_opts):
         return any((arg.doc_included(d_path, d_opts) for arg in self.args))
+
+
+class InFilter:
+
+    def __init__(self, docs):
+        self.docs = {(freeze(doc["path"]), freeze(doc["opts"])) for doc in docs}
+
+    def doc_included(self, d_path, d_opts):
+        return (freeze(d_path), freeze(dict(d_opts)["opts"])) in self.docs
 
 
 empty_filter = SimpleFilter()
