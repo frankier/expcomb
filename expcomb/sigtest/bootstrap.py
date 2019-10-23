@@ -94,7 +94,7 @@ def mk_compare_resampled(inner):
 def simple_compare_resampled():
 
     @mk_compare_resampled
-    @click.argument("docs", type=click.File("rb"), nargs=-1)
+    @click.argument("docs", type=click.File("rb"), nargs=-1, required=True)
     @click.argument("outf", type=TinyDBParam())
     def res(docs, outf):
         return docs, outf
@@ -108,6 +108,7 @@ def compare_resampled_inner(docs, outf):
     for doc in docs:
         resamples.append(doc["resampled"])
         del doc["resampled"]
+    assert len(resamples) >= 1
     orig_f1s, resampled_f1s = zip(*resamples)
     result = compare_f1s(orig_f1s, resampled_f1s)
     with transaction(outf) as tr:
