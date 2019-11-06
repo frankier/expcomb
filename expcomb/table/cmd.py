@@ -5,13 +5,20 @@ from pylatex import Document, NoEscape, Package
 
 from expcomb.doc_utils import pk
 from expcomb.filter import empty_filter
-from .utils import docs_from_dbs, highlights_from_dbs, key_highlights
+from .utils import clds_from_dbs, docs_from_dbs, highlights_from_dbs, key_doc_selectors
 
 
 def indicate_highlights(docs, highlights, pk_extra, key):
-    highlights_keyed = key_highlights(highlights)
+    highlights_keyed = set(key_doc_selectors(highlights))
     for doc in docs:
         doc[key] = pk(doc, pk_extra) in highlights_keyed
+
+
+def add_clds(docs, clds, pk_extra):
+    for doc in docs:
+        key = pk(doc, pk_extra)
+        if key in clds:
+            doc["clds"] = clds[key]
 
 
 def add_tables(group, tables_tpls, pk_extra):
@@ -43,6 +50,8 @@ def add_tables(group, tables_tpls, pk_extra):
             docs = docs_from_dbs(db_paths, filter, pk_extra)
             highlights = highlights_from_dbs(db_paths, filter, "guesses")
             maxs = highlights_from_dbs(db_paths, filter, "max")
+            clds = clds_from_dbs(db_paths, filter)
+            add_clds(docs, clds, pk_extra)
             indicate_highlights(docs, highlights, pk_extra, "highlight")
             indicate_highlights(docs, maxs, pk_extra, "max")
 

@@ -202,7 +202,7 @@ class BoundDimGroups(BoundDimGroupsBase):
         return "".join(res)
 
     def num_tiers(self):
-        return len(self.spec.groups)
+        return 1 if self.spec.flat_headings else len(self.spec.groups)
 
 
 class DimGroups(Bindable):
@@ -474,13 +474,21 @@ class BoundSumTableSpec:
             nums.extend(((measure, span) for measure in self.measures_of_doc(doc)))
         return nums
 
-    def print(self, outf=sys.stdout):
+    def print_head(self, outf):
         flat_headers = self.get_headings()
         outf.write(
             r"\begin{tabu} to \linewidth { l l l " + "r " * len(flat_headers) + "}\n"
         )
         outf.write("\\toprule\n")
+
+    def print_foot(self, outf):
+        outf.write("\\bottomrule\n")
+        outf.write("\\end{tabu}")
+
+    def print(self, outf=sys.stdout):
+        self.print_head(outf)
         if self.spec.flat_headings:
+            flat_headers = self.get_headings()
             outf.write("System & ")
             if self.x_groups.num_tiers() == 2:
                 outf.write("Variant & ")
@@ -511,8 +519,7 @@ class BoundSumTableSpec:
                 )
                 + " \\\\\n"
             )
-        outf.write("\\bottomrule\n")
-        outf.write("\\end{tabu}")
+        self.print_foot(outf)
 
 
 class SumTableSpec(TableSpec):
@@ -531,3 +538,63 @@ class SumTableSpec(TableSpec):
         self.measure = measure
         self.displayer = displayer or (lambda x: x)
         self.flat_headings = flat_headings
+
+
+class BoundSortedColsSpec(BoundSumTableSpec):
+
+    def __init__(self, spec: "SumTableSpec", docs):
+        self.spec = spec
+        self.docs = docs
+        self.x_groups = self.spec.x_groups.bind(docs)
+        self.groups = self.spec.groups.bind(docs)
+
+    def print(self, outf=sys.stdout):
+        assert self.x_groups.num_tiers() == 1
+        outf.write(
+            r"\begin{tabu} to \linewidth { l l l "
+            + "l "
+            * len(list(self.x_groups.iter_rows_heads()))
+            + "}\n"
+        )
+        outf.write("\\toprule\n")
+
+        headers = self.get_nested_headings()
+        for stratum in headers:
+            outf.write(stratum_row_latex(((label, 2) for label, _span in stratum)))
+
+        cols = []
+        for row_num, x_filter, head_latex in self.x_groups.iter_rows_heads():
+            inner_docs = filter_docs(self.docs, x_filter)
+            for col_num, ((doc, _span), (n, _span)) in enumerate(
+                zip(self.comb_order_docs(inner_docs), self.get_nums(inner_docs))
+            ):
+                while len(cols) <= col_num:
+                    cols.append([])
+                cols[col_num].append((n, doc, head_latex))
+        for col in cols:
+            col.sort(reverse=True, key=lambda tpl: float(tpl[0].strip("%")))
+
+        for row in zip(*cols):
+            for cell_idx, (n, doc, head_latex) in enumerate(row):
+                outf.write(head_latex)
+                outf.write(n.strip("%"))
+                if "clds" in doc:
+                    outf.write("$_{{{}}}$".format(",".join(doc["clds"])))
+                if cell_idx < len(row) - 1:
+                    outf.write(" & ")
+                else:
+                    outf.write(" \\\\\n")
+        self.print_foot(outf)
+
+
+class SortedColsSpec(TableSpec):
+    bound_class = BoundSortedColsSpec
+
+    def __init__(
+        self, x_groups: DimGroups, groups: DimGroups, measure: Measure, displayer=None
+    ):
+        self.x_groups = x_groups
+        self.groups = groups
+        self.measure = measure
+        self.displayer = displayer or (lambda x: x)
+        self.flat_headings = False

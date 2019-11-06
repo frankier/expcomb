@@ -2,7 +2,6 @@ import click
 from expcomb import logger
 from expcomb.utils import TinyDBParam
 from tinyrecord import transaction
-import pickle
 from networkx import DiGraph, Graph
 from networkx.algorithms.clique import find_cliques
 from collections import Counter
@@ -17,7 +16,7 @@ def num2letter(num):
     res = ""
     num += 1
     while num:
-        res = chr(97 + (num % 26)) + res
+        res = chr(96 + (num % 26)) + res
         num = num // 26
     return res
 
@@ -38,6 +37,8 @@ def mk_sd_graph(pvalmat, thresh=0.05):
     Make a graph with edges as signifcant differences between treatments.
     """
     digraph = DiGraph()
+    for idx in range(len(pvalmat)):
+        digraph.add_node(idx)
     for idx_a, idx_b, b_bigger, p_val in iter_all_pairs_cmp(pvalmat):
         if p_val > thresh:
             continue
@@ -53,6 +54,8 @@ def mk_nsd_graph(pvalmat, thresh=0.05):
     Make a graph with edges as non signifcant differences between treatments.
     """
     graph = Graph()
+    for idx in range(len(pvalmat)):
+        graph.add_node(idx)
     for idx_a, idx_b, b_bigger, p_val in iter_all_pairs_cmp(pvalmat):
         if p_val <= thresh:
             continue
@@ -95,9 +98,9 @@ def hasse(pairs_in, thresh):
 
 @disp.command("cld")
 @click.argument("pairs-in", type=TinyDBParam())
-@click.argument("outf", type=click.File("wb"))
+@click.argument("db", type=TinyDBParam())
 @click.option("--thresh", type=float, default=0.05)
-def cld(pairs_in, outf, thresh):
+def cld(pairs_in, db, thresh):
     """
     Create a Compact Letter Display (CLD) grouping together treatments/expcombs
     which have no significant difference. See:
@@ -126,7 +129,18 @@ def cld(pairs_in, outf, thresh):
     logger.info(
         "\n".join(f"{elem}: {letters}" for elem, letters in sorted(res.items()))
     )
-    pickle.dump(res, outf)
+    with transaction(db) as tr:
+        res_len = len(res.keys())
+        letters = [res[idx] for idx in range(res_len)]
+        assert len(letters) == len(docs)
+        tr.insert(
+            {
+                "type": "cld-label",
+                "orig-scores": orig_scores,
+                "docs": docs,
+                "letters": letters,
+            }
+        )
 
 
 @disp.command("nsd-from-best")

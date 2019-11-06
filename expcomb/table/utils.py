@@ -101,6 +101,17 @@ def highlights_from_dbs(db_paths, filter, key):
     return guesses
 
 
+def clds_from_dbs(db_paths, filter):
+    docs = all_docs(expand_db_paths(db_paths))
+    clds = {}
+    for doc in docs:
+        if not doc.get("type") == "cld-label":
+            continue
+        for key, cld in zip(key_doc_selectors(doc["docs"]), doc["letters"]):
+            clds[key] = cld
+    return clds
+
+
 def pick(haystack, selector, permissive=False):
     if not selector:
         return haystack
@@ -217,10 +228,6 @@ def fixup_lists(v):
     return v
 
 
-def key_highlights(highlights):
-    highlights_keyed = set()
-    for highlight in highlights:
-        highlights_keyed.add(
-            tuple(sorted((k, fixup_lists(v)) for k, v in highlight.items()))
-        )
-    return highlights_keyed
+def key_doc_selectors(selectors):
+    for selector in selectors:
+        yield tuple(sorted((k, fixup_lists(v)) for k, v in selector.items()))
