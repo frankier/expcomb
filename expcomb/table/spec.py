@@ -572,13 +572,18 @@ class BoundSortedColsSpec(BoundSumTableSpec):
                     cols.append([])
                 cols[col_num].append((n, doc, head_latex))
         for col in cols:
-            col.sort(reverse=True, key=lambda tpl: float(tpl[0].strip("%")))
+            col.sort(
+                reverse=True,
+                key=lambda tpl: float(tpl[0].strip("%"))
+                if tpl[0][-1] == "%"
+                else float("-inf"),
+            )
 
         for row in zip(*cols):
             for cell_idx, (n, doc, head_latex) in enumerate(row):
                 outf.write(head_latex)
                 outf.write(n.strip("%"))
-                if "clds" in doc:
+                if doc and "clds" in doc:
                     outf.write("$_{{{}}}$".format(",".join(doc["clds"])))
                 if cell_idx < len(row) - 1:
                     outf.write(" & ")
