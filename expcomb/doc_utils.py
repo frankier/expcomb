@@ -40,18 +40,26 @@ def all_recent(dbs, pk_extra):
 
 
 def expand_db_paths(db_paths):
-    dbs = []
+    prev_db = None
 
-    def add_path(path):
-        dbs.append(TinyDB(path).table("results"))
+    def close_prev():
+        if prev_db is not None:
+            prev_db.close()
+
+    def open_db(path):
+        nonlocal prev_db
+        close_prev()
+        db = TinyDB(path)
+        prev_db = db
+        return db.table("results")
 
     for db_path in db_paths:
         if os.path.isdir(db_path):
             for sub_path in glob(pjoin(db_path, "**", "*.db"), recursive=True):
-                add_path(sub_path)
+                yield open_db(sub_path)
         else:
-            add_path(db_path)
-    return dbs
+            yield open_db(db_path)
+    close_prev()
 
 
 def all_docs_from_dbs(db_paths, pk_extra):
