@@ -58,19 +58,9 @@ def get_doc(docs, opts):
 
 
 def get_attr_value_pairs(spec: List["Grouping"], docs):
-    from .spec import CatGroup, CatValGroup
-
     pairs = []
     for bit in spec:
-        if isinstance(bit, CatGroup):
-            attr = bit.get_cat()
-            vals = get_values(docs, attr)
-        elif isinstance(bit, CatValGroup):
-            attr = bit.get_cat()
-            vals = bit.vals
-        else:
-            assert False
-        pairs.append((attr, vals))
+        pairs.append((bit.get_cat(), bit.get_values(docs)))
     return pairs
 
 

@@ -18,6 +18,7 @@ from .utils import (
     get_nested_row_headings,
     row_heading_latex,
     filter_docs,
+    get_values,
 )
 
 
@@ -25,6 +26,10 @@ class Grouping(ABC):
 
     @abstractmethod
     def get_cat(self):
+        pass
+
+    @abstractmethod
+    def get_values(self, docs):
         pass
 
 
@@ -36,6 +41,9 @@ class CatGroup(Grouping):
     def get_cat(self):
         return self.cat
 
+    def get_values(self, docs):
+        return get_values(docs, self.get_cat())
+
 
 class CatValGroup(Grouping):
 
@@ -45,6 +53,9 @@ class CatValGroup(Grouping):
 
     def get_cat(self):
         return self.cat
+
+    def get_values(self, docs):
+        return self.vals
 
 
 class LookupGroupDisplay:
