@@ -171,7 +171,11 @@ def stratum_row_latex(stratum, sep_slices=None):
             line = "|"
         else:
             line = ""
-        res.append("\\multicolumn{{{}}}{{{}c}}{{{}}} ".format(span, line, label))
+        res.append(
+            "\\multicolumn{{{}}}{{{}c}}{{{}}} ".format(span, line, label)
+            if span > 1
+            else label
+        )
     res.append(" \\\\\n")
     return "".join(res)
 

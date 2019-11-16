@@ -526,6 +526,8 @@ class BoundSumTableSpec:
             outf.write(
                 " & ".join(
                     "\\multicolumn{{{}}}{{c}}{{{}}}".format(span, disp_num(n))
+                    if span > 1
+                    else disp_num(n)
                     for n, span in self.get_nums(inner_docs)
                 )
                 + " \\\\\n"
