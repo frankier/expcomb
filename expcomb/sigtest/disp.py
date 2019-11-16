@@ -121,7 +121,12 @@ def cld(pairs_in, db, thresh):
     graph = mk_nsd_graph(pvalmat, thresh)
     res = {}
 
-    for clique_idx, clique in enumerate(find_cliques(graph)):
+    cliques = sorted(
+        find_cliques(graph),
+        key=lambda clique: -max((orig_scores[elem] for elem in clique)),
+    )
+
+    for clique_idx, clique in enumerate(cliques):
         logger.info("%s: %s", clique_idx, clique)
         for elem in clique:
             res.setdefault(elem, []).append(num2letter(clique_idx))
