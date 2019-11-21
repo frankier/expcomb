@@ -72,7 +72,7 @@ def resample_cmd_inner(bootstrapper, outf, gold, guess, result, schedule, extra_
     """
     Get many scores from resampled versions of the corpus.
     """
-    resampled = resample(bootstrapper, gold, guess, result, schedule)
+    resampled = resample(bootstrapper, gold, guess, schedule)
     docs = list(result)
     assert len(docs) == 1
     output = dict(pk(docs[0], extra_pk))
@@ -207,7 +207,7 @@ class IterPairs:
                 yield guess_idx, guess_a, guess_b
 
 
-def resample(bootstrapper, gold, guess, result, schedule):
+def resample(bootstrapper, gold, guess, schedule):
     orig_score = bootstrapper.score_one(gold, guess)
     resampled_score = bootstrapper.create_score_dist(gold, guess, schedule)
     return orig_score, resampled_score
