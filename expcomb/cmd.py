@@ -88,6 +88,16 @@ def mk_expcomb(experiments, calc_score, pk_extra=None, tables=None):
                 yield exp.nick
 
         @staticmethod
+        def intersect_nicks(filter, **kwargs):
+            if all(
+                (
+                    k not in filter.opt_dict or filter.opt_dict[k] == v
+                    for k, v in kwargs.items()
+                )
+            ):
+                yield from SnakeMake.get_nicks(filter.intersect_opts(**kwargs))
+
+        @staticmethod
         def get_non_group_at_once_nicks(filter: SimpleFilter = empty_filter):
             all_nicks = set(SnakeMake.get_nicks(filter))
             bad_nicks = SnakeMake.get_group_at_once_nicks(filter)
