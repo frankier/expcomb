@@ -1,6 +1,5 @@
 import click
 from tinydb import TinyDB
-from plumbum.cmd import java
 from os.path import join as pjoin, basename
 from .filter import SimpleFilter
 
@@ -24,19 +23,6 @@ def mk_nick(*inbits):
         else:
             assert False
     return ".".join(outbits)
-
-
-def score(gold, guess):
-    scorer = java["Scorer", gold, guess]
-    score_out = scorer()
-    measures = {}
-    for line in score_out.split("\n"):
-        if not line:
-            continue
-        bits = line.split()
-        assert bits[0][-1] == "="
-        measures[bits[0][:-1]] = bits[1]
-    return measures
 
 
 def mk_guess_path(path_info, iden):
