@@ -79,8 +79,11 @@ class Measure(ABC):
         pass
 
     @abstractmethod
-    def get_measures(self) -> List[str]:
+    def get_measures(self, doc) -> List[str]:
         pass
+
+    def num_measures(self):
+        return 1
 
 
 class MeasuresSplit(Measure):
@@ -91,8 +94,11 @@ class MeasuresSplit(Measure):
     def get_titles(self) -> Optional[List[str]]:
         return self.measures
 
-    def get_measures(self) -> List[str]:
+    def get_measures(self, doc) -> List[str]:
         return self.measures
+
+    def num_measures(self):
+        return len(self.measures)
 
 
 class UnlabelledMeasure(Measure):
@@ -103,8 +109,30 @@ class UnlabelledMeasure(Measure):
     def get_titles(self) -> Optional[List[str]]:
         return None
 
-    def get_measures(self) -> List[str]:
+    def get_measures(self, doc) -> List[str]:
         return [self.measure]
+
+
+class SelectingMeasure(Measure):
+
+    def __init__(self, *cond):
+        self.cond = cond
+
+    def dispatch_measure(self, doc):
+        for cond in self.cond:
+            if isinstance(cond, tuple) and len(cond) == 2:
+                if cond[0].doc_included(doc["path"], {**doc, **doc["opts"]}):
+                    return cond[1]
+            else:
+                return cond
+
+    def get_titles(self) -> Optional[List[str]]:
+        pass
+
+    def get_measures(self, doc) -> List[str]:
+        measure = self.dispatch_measure(doc)
+        assert measure
+        return measure.get_measures(doc)
 
 
 class InvalidSpecException(Exception):
@@ -278,7 +306,7 @@ class BoundSqTableSpec:
                             str(
                                 pick_str(
                                     picked_doc[0]["measures"],
-                                    self.spec.measure.get_measures()[0],
+                                    self.spec.measure.get_measures(picked_doc[0])[0],
                                 )
                             )
                         )
@@ -475,9 +503,9 @@ class BoundSumTableSpec:
                 else:
                     return self.spec.displayer(measure)
 
-            return (get_measure(m) for m in self.spec.measure.get_measures())
+            return (get_measure(m) for m in self.spec.measure.get_measures(doc))
         else:
-            return (NoEscape("---") for _ in self.spec.measure.get_measures())
+            return (NoEscape("---") for _ in self.spec.measure.get_measures(None))
 
     def get_nums(self, inner_docs):
         nums = []
@@ -585,12 +613,7 @@ class BoundSortedColsSpec(BoundSumTableSpec):
                     cols.append([])
                 cols[col_num].append((n, doc, head_latex))
         for col in cols:
-            col.sort(
-                reverse=True,
-                key=lambda tpl: float(tpl[0].strip("%"))
-                if tpl[0][-1] == "%"
-                else float("-inf"),
-            )
+            self.spec.sorter(col)
 
         for row in zip(*cols):
             for cell_idx, (n, doc, head_latex) in enumerate(row):
@@ -609,10 +632,23 @@ class SortedColsSpec(TableSpec):
     bound_class = BoundSortedColsSpec
 
     def __init__(
-        self, x_groups: DimGroups, groups: DimGroups, measure: Measure, displayer=None
+        self,
+        x_groups: DimGroups,
+        groups: DimGroups,
+        measure: Measure,
+        displayer=None,
+        sorter=None,
     ):
         self.x_groups = x_groups
         self.groups = groups
         self.measure = measure
         self.displayer = displayer or (lambda x: x)
+        self.sorter = sorter or (
+            lambda col: col.sort(
+                reverse=True,
+                key=lambda tpl: float(tpl[0].strip("%"))
+                if tpl[0][-1] == "%"
+                else float("-inf"),
+            )
+        )
         self.flat_headings = False
