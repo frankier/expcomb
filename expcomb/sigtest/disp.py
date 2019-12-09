@@ -152,14 +152,18 @@ def cld(pairs_in, db, thresh):
 @click.argument("pairs-in", type=TinyDBParam())
 @click.argument("db", type=TinyDBParam())
 @click.option("--thresh", type=float, default=0.05)
-def nsd_from_best(pairs_in, db, thresh):
+@click.option("--delta", type=float, default=0.01)
+@click.option("--exclude-best/--include-best")
+def nsd_from_best(pairs_in, db, thresh, delta, exclude_best):
     pvalmat, orig_scores, docs = load_pairs_in(pairs_in)
     graph = mk_nsd_graph(pvalmat, thresh)
     for idx, (score, doc) in enumerate(zip(orig_scores, docs)):
         logger.info("%s %s %s", idx, doc, score)
     max_score = max(orig_scores)
+    if exclude_best:
+        max_score = max((score for score in orig_scores if score < max_score))
     max_scores = [
-        idx for idx, score in enumerate(orig_scores) if score + 0.01 > max_score
+        idx for idx, score in enumerate(orig_scores) if score + delta > max_score
     ]
     logger.info("max_scores: %s", max_scores)
     nsd_from_max = set(max_scores) | {
