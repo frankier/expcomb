@@ -1,4 +1,5 @@
 import sys
+from contextlib import contextmanager
 from functools import reduce
 from typing import Any, List, Optional, Tuple
 from abc import ABC, abstractmethod
@@ -255,6 +256,18 @@ class DimGroups(Bindable):
         self.div_idx = div_idx
 
 
+@contextmanager
+def doc_highlights(doc, outf):
+    if doc:
+        if doc.get("highlight"):
+            outf.write("\\cellcolor{blue!10}")
+        if doc.get("max"):
+            outf.write("\\textbf{")
+    yield
+    if doc and doc.get("max"):
+        outf.write("}")
+
+
 class BoundSqTableSpec:
 
     def __init__(self, spec: "SqTableSpec", docs, permissive=False):
@@ -297,22 +310,19 @@ class BoundSqTableSpec:
                 opts = AndFilter(x_filter, y_filter)
                 picked_doc = filter_docs(self.docs, opts)
                 if len(picked_doc) == 1:
-                    if picked_doc[0].get("highlight"):
-                        outf.write("\\cellcolor{blue!10}")
-                    if picked_doc[0].get("max"):
-                        outf.write("\\textbf{")
-                    outf.write(
-                        escape_latex(
-                            str(
-                                pick_str(
-                                    picked_doc[0]["measures"],
-                                    self.spec.measure.get_measures(picked_doc[0])[0],
+                    with doc_highlights(picked_doc[0], outf):
+                        outf.write(
+                            escape_latex(
+                                str(
+                                    pick_str(
+                                        picked_doc[0]["measures"],
+                                        self.spec.measure.get_measures(picked_doc[0])[
+                                            0
+                                        ],
+                                    )
                                 )
                             )
                         )
-                    )
-                    if picked_doc[0].get("max"):
-                        outf.write("}")
                 else:
                     outf.write("---")
                 if col_num < self.y_groups.num_combs() - 1:
@@ -351,32 +361,41 @@ class BoundSumDimGroups(BoundDimGroupsBase):
         self.docs = docs
 
     def iter_rows_heads(self):
+        for row_idx, (disp, inner_docs) in enumerate(
+            self.spec.do_sorted_grouped(self.docs)
+        ):
+            yield row_idx, InFilter(inner_docs), escape_latex(disp) + " & "
+
+
+class BoundSumDimGroups2L(BoundDimGroupsBase):
+
+    def __init__(self, spec, docs):
+        self.spec = spec
+        self.docs = docs
+
+    def iter_rows_heads(self):
         row_idx = 0
         for path_idx, (path, outer_docs) in enumerate(
             key_group_by(self.docs, lambda doc: doc["path"])
         ):
             row_head = []
-            if path_idx > 0 and self.spec.two_levels:
+            if path_idx > 0:
                 row_head.append("\\midrule\n")
             doc_groups = list(key_group_by(outer_docs, lambda doc: doc["disp"]))
-            if self.spec.two_levels:
-                prefix = (
-                    r"\multirow{"
-                    + str(len(doc_groups))
-                    + "}{*}{"
-                    + " ".join(p.title() for p in path)
-                    + "}"
-                )
-                padding = len(prefix)
-                row_head.append(prefix)
-            else:
-                padding = 0
+            prefix = (
+                r"\multirow{"
+                + str(len(doc_groups))
+                + "}{*}{"
+                + " ".join(p.title() for p in path)
+                + "}"
+            )
+            padding = len(prefix)
+            row_head.append(prefix)
             for idx, (disp, inner_docs) in enumerate(doc_groups):
                 if idx != 0:
                     row_head = []
                     row_head.append(" " * padding)
-                if self.spec.two_levels:
-                    row_head.append(r" & ")
+                row_head.append(r" & ")
                 row_head.append(escape_latex(disp) + " & ")
                 yield row_idx, InFilter(inner_docs), "".join(row_head)
             row_idx += 1
@@ -385,14 +404,22 @@ class BoundSumDimGroups(BoundDimGroupsBase):
 class SumDimGroups(Bindable):
     bound_class = BoundSumDimGroups
 
-    def __init__(self, two_levels=False):
-        self.two_levels = two_levels
+    def __init__(self, sorted_grouped=None):
+        self.do_sorted_grouped = sorted_grouped or self.sorted_grouped
 
     def num_tiers(self):
-        if self.two_levels:
-            return 2
-        else:
-            return 1
+        return 1
+
+    def sorted_grouped(self, docs):
+        for path, outer_docs in key_group_by(docs, lambda doc: doc["path"]):
+            yield from key_group_by(outer_docs, lambda doc: doc["disp"])
+
+
+class SumDimGroups2L(Bindable):
+    bound_class = BoundSumDimGroups2L
+
+    def num_tiers(self):
+        return 2
 
 
 class BoundSelectDimGroups(BoundDimGroupsBase):
@@ -505,24 +532,22 @@ class BoundSumTableSpec:
 
             return (get_measure(m) for m in self.spec.measure.get_measures(doc))
         else:
-            return (NoEscape("---") for _ in self.spec.measure.get_measures(None))
+            return (NoEscape("---") for i in range(self.spec.measure.num_measures()))
 
     def get_nums(self, inner_docs):
         nums = []
         for doc, span in self.comb_order_docs(inner_docs):
-            nums.extend(((measure, span) for measure in self.measures_of_doc(doc)))
+            nums.extend(((doc, measure, span) for measure in self.measures_of_doc(doc)))
         return nums
 
     def print_head(self, outf):
         flat_headers = self.get_headings()
-        outf.write(
-            r"\begin{tabu} to \linewidth { l l l " + "r " * len(flat_headers) + "}\n"
-        )
+        outf.write(r"\begin{tabular}{ l l l " + "r " * len(flat_headers) + "}\n")
         outf.write("\\toprule\n")
 
     def print_foot(self, outf):
         outf.write("\\bottomrule\n")
-        outf.write("\\end{tabu}")
+        outf.write("\\end{tabular}")
 
     def print(self, outf=sys.stdout):
         self.print_head(outf)
@@ -551,15 +576,16 @@ class BoundSumTableSpec:
             # outf.write("\\midrule\n")
             outf.write(head_latex)
             inner_docs = filter_docs(self.docs, x_filter)
-            outf.write(
-                " & ".join(
-                    "\\multicolumn{{{}}}{{c}}{{{}}}".format(span, disp_num(n))
-                    if span > 1
-                    else disp_num(n)
-                    for n, span in self.get_nums(inner_docs)
-                )
-                + " \\\\\n"
-            )
+            for idx, (doc, n, span) in enumerate(self.get_nums(inner_docs)):
+                if idx > 0:
+                    outf.write(" & ")
+                if span > 1:
+                    outf.write("\\multicolumn{{{}}}{{c}}{{".format(span))
+                with doc_highlights(doc, outf):
+                    outf.write(disp_num(n))
+                if span > 1:
+                    outf.write("}")
+            outf.write(" \\\\\n")
         self.print_foot(outf)
 
 
@@ -572,6 +598,7 @@ class SumTableSpec(TableSpec):
         groups: DimGroups,
         measure: Measure,
         displayer=None,
+        highlight=None,
         flat_headings: bool = False,
     ):
         self.x_groups = x_groups
@@ -579,6 +606,8 @@ class SumTableSpec(TableSpec):
         self.measure = measure
         self.displayer = displayer or (lambda x: x)
         self.flat_headings = flat_headings
+        assert highlight in [None, box_highlight]
+        self.highlight = highlight
 
 
 class BoundSortedColsSpec(BoundSumTableSpec):
@@ -592,7 +621,7 @@ class BoundSortedColsSpec(BoundSumTableSpec):
     def print(self, outf=sys.stdout):
         assert self.x_groups.num_tiers() == 1
         outf.write(
-            r"\begin{tabu} to \linewidth { l l l "
+            r"\begin{tabular}{ l l l "
             + "l "
             * len(list(self.x_groups.iter_rows_heads()))
             + "}\n"
@@ -606,7 +635,7 @@ class BoundSortedColsSpec(BoundSumTableSpec):
         cols = []
         for row_num, x_filter, head_latex in self.x_groups.iter_rows_heads():
             inner_docs = filter_docs(self.docs, x_filter)
-            for col_num, ((doc, _span), (n, _span)) in enumerate(
+            for col_num, ((doc, _span), (_doc, n, _span)) in enumerate(
                 zip(self.comb_order_docs(inner_docs), self.get_nums(inner_docs))
             ):
                 while len(cols) <= col_num:
